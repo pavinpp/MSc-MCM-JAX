@@ -9,6 +9,7 @@ from jax import jit
 import jax.numpy as jnp
 from functools import partial
 import trimesh
+from termcolor import colored
 
 import os
 import __main__
@@ -113,6 +114,15 @@ def save_fields_vtk(timestep, fields, output_dir='.', prefix='fields'):
             dimensions = value.shape
         else:
             assert value.shape == dimensions, "All fields must have the same dimensions!"
+    
+    if not os.path.exists("./" + output_dir):
+        print(
+            colored(
+                "Directory does not exist, creating the directory " + output_dir,
+                "yellow",
+            )
+        )
+        os.makedirs(output_dir)
 
     output_filename = os.path.join(output_dir, prefix +  "_" + f"{timestep:07d}.vtk")
 
