@@ -1,24 +1,22 @@
 # Standard Libraries
 import os
 import time
+# functools imports
+from functools import partial
 
 # Third-Party Libraries
 import jax
 import jax.numpy as jnp
 import jmp
 import numpy as np
-from termcolor import colored
-
+import orbax.checkpoint as orb
 # JAX-related imports
 from jax import jit, lax, vmap
 from jax.experimental import mesh_utils
 from jax.experimental.multihost_utils import process_allgather
 from jax.experimental.shard_map import shard_map
-from jax.sharding import NamedSharding, PartitionSpec, PositionalSharding, Mesh
-import orbax.checkpoint as orb
-
-# functools imports
-from functools import partial
+from jax.sharding import Mesh, NamedSharding, PartitionSpec, PositionalSharding
+from termcolor import colored
 
 # Local/Custom Libraries
 from src.utils import downsample_field
@@ -82,7 +80,8 @@ class LBMBase(object):
         # Set the checkpoint manager
         if self.checkpointRate > 0:
             mngr_options = orb.CheckpointManagerOptions(save_interval_steps=self.checkpointRate, max_to_keep=1)
-            self.mngr = orb.CheckpointManager(self.checkpointDir, orb.PyTreeCheckpointer(), options=mngr_options)
+            # self.mngr = orb.CheckpointManager(self.checkpointDir, orb.PyTreeCheckpointer(), options=mngr_options)
+            self.mngr = orb.CheckpointManager(self.checkpointDir, options=mngr_options)
         else:
             self.mngr = None
         
@@ -96,7 +95,7 @@ class LBMBase(object):
         self.nx = nx
         if nx % self.nDevices:
             self.nx = nx + (self.nDevices - nx % self.nDevices)
-            print("WARNING: nx increased from {} to {} in order to accommodate domain sharding per XLA device.".format(nx, self.nx))
+            print(colored("WARNING: nx increased from {} to {} in order to accommodate domain sharding per XLA device.".format(nx, self.nx)), "yellow")
         self.ny = ny
         self.nz = nz
 
@@ -118,7 +117,7 @@ class LBMBase(object):
         # Define the left permutation
         self.leftPerm = [((i + 1) % self.nDevices, i) for i in range(self.nDevices)]
 
-        # Set up the sharding and streaming for 2D and 3D simulations
+        # Set up the sharding and streaming for 2D simulations
         if self.dim == 2:
             self.devices = mesh_utils.create_device_mesh((self.nDevices, 1, 1))
             self.mesh = Mesh(self.devices, axis_names=("x", "y", "value"))
@@ -127,7 +126,7 @@ class LBMBase(object):
             self.streaming = jit(shard_map(self.streaming_m, mesh=self.mesh,
                                                       in_specs=P("x", None, None), out_specs=P("x", None, None), check_rep=False))
 
-        # Set up the sharding and streaming for 2D and 3D simulations
+        # Set up the sharding and streaming for 3D simulations
         elif self.dim == 3:
             self.devices = mesh_utils.create_device_mesh((self.nDevices, 1, 1, 1))
             self.mesh = Mesh(self.devices, axis_names=("x", "y", "z", "value"))
@@ -168,8 +167,6 @@ class LBMBase(object):
     def omega(self, value):
         if value is None:
             raise ValueError("omega must be provided")
-        if not isinstance(value, float):
-            raise TypeError("omega must be a float")
         self._omega = value
 
     @property
@@ -792,7 +789,7 @@ class LBMBase(object):
 
         Returns
         -------
-        ja.numpy.ndarray
+        jax.numpy.ndarray
             The output distribution functions after applying the boundary conditions.
         """
         for bc in self.BCs:
@@ -872,10 +869,11 @@ class LBMBase(object):
                 # Assert that the checkpoint manager is not None
                 assert self.mngr is not None, "Checkpoint manager does not exist."
                 state = {'f': f}
-                shardings = jax.tree_map(lambda x: x.sharding, state)
-                restore_args = orb.checkpoint_utils.construct_restore_args(state, shardings)
+                # shardings = map(lambda x: x.sharding, state)
+                # restore_args = orb.checkpoint_utils.construct_restore_args(state, shardings)
                 try:
-                    f = self.mngr.restore(latest_step, restore_kwargs={'restore_args': restore_args})['f']
+                    # f = self.mngr.restore(latest_step, restore_kwargs={'restore_args': restore_args})['f']
+                    f = self.mngr.restore(latest_step, args=orb.args.StandardSave(state))['f']
                     print(f"Restored checkpoint at step {latest_step}.")
                 except ValueError:
                     raise ValueError(f"Failed to restore checkpoint at step {latest_step}.")
@@ -925,7 +923,8 @@ class LBMBase(object):
                 # Save the checkpoint
                 print(f"Saving checkpoint at timestep {timestep}/{t_max}")
                 state = {'f': f}
-                self.mngr.save(timestep, state)
+                # self.mngr.save(timestep, state)
+                self.mngr.save(timestep, args=state)
             
             # Start the timer for the MLUPS computation after the first timestep (to remove compilation overhead)
             if self.computeMLUPS and timestep == 1:

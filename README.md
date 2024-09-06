@@ -1,18 +1,18 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub star chart](https://img.shields.io/github/stars/Autodesk/XLB?style=social)](https://star-history.com/#Autodesk/XLB)
-<p align="center">
+<!-- <p align="center">
   <img src="assets/logo-transparent.png" alt="" width="300">
-</p>
+</p> -->
 
-# XLB: A Differentiable Massively Parallel Lattice Boltzmann Library in Python for Physics-Based Machine Learning
+# JLBM: A Differentiable Massively Parallel Lattice Boltzmann Library in Python for Physics-Based Machine Learning
 
-XLB is a fully differentiable 2D/3D Lattice Boltzmann Method (LBM) library that leverages hardware acceleration. It's built on top of the [JAX](https://github.com/google/jax) library and is specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool for applications in physics-based machine learning.
+JLBM is a fully differentiable 2D/3D Lattice Boltzmann Method (LBM) library that leverages hardware acceleration. It's built on top of the [JAX](https://github.com/google/jax) library and is specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool for applications in physics-based machine learning. JLBM is an extension of [XLB](https://github.com/Autodesk/XLB)
 
 ## Accompanying Paper
 
 Please refer to the [accompanying paper](https://doi.org/10.1016/j.cpc.2024.109187) for benchmarks, validation, and more details about the library.
 
-## Citing XLB
+<!-- ## Citing XLB
 
 If you use XLB in your research, please cite the following paper:
 
@@ -26,7 +26,7 @@ If you use XLB in your research, please cite the following paper:
   year={2024},
   publisher={Elsevier}
 }
-```
+``` -->
 
 ## Key Features
 - **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.

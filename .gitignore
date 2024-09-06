@@ -1,6 +1,10 @@
+# tmp
+examples/multiphase
 # Editors
 .vscode/
 .idea/
+.zed/
+pyrightconfig.json
 
 # Outputs
 *vti
@@ -30,6 +34,9 @@
 
 # Mac/OSX
 .DS_Store
+
+# Misc
+misc/
 
 # Windows
 Thumbs.db
