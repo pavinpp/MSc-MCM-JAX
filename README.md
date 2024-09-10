@@ -38,6 +38,11 @@ If you use XLB in your research, please cite the following paper:
 - **Platform Versatility:** The same XLB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
 - **Visualization:** XLB provides a variety of visualization options including in-situ on GPU rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze).
 
+### New Features added in this fork
+#### **Multicomponent & Multiphase flows**: 
+- **Arbitrary number of components** The library utilizes JAX's pytree functionality to model multiphase flows with arbitrary number of components.modeled using **Equation of State (EOS)**. 
+- Implemented EOS: **Carnahan-Starling**, **Shan-Chen**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong Soave** and **Van der Waals** with easy extension to any other arbitrary EOS.
+
 ## Showcase
 
 
@@ -86,10 +91,16 @@ The stages of a fluid density field from an initial state to the emergence of th
 - BGK collision model (Standard LBM collision model)
 - KBC collision model (unconditionally stable for flows with high Reynolds number)
 
+#### Multicomponent and Multiphase flows
+
+- Shan-Chen pseudopotential method (BGK collision model)
+- Supports **arbitrary number of components** each modeled using **Equation of State (EOS)**.
+- Implemented EOS: **Carnahan-Starling**, **Shan-Chen**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong Soave** and **Van der Waals** with easy extension to any other arbitrary EOS.
+
 ### Machine Learning
 
 - Easy integration with JAX's ecosystem of machine learning libraries
-- Differentiable LBM kernels
+- Differentiable LBM kernels both for single and multiphase flows
 - Differentiable boundary conditions
 
 ### Lattice Models
@@ -181,7 +192,7 @@ python3 examples/CFD/cavity2d.py
 - 📉 **Reduced Order Modeling using Machine Learning:** Developing data-driven reduced-order models for efficient and accurate simulations.
 
 
-### Wishlist
+<!-- ### Wishlist
 *Contributions to these features are welcome. Please submit PRs for the Wishlist items.*
 
 - 🌊 **Free Surface Flows:** Simulating flows with free surfaces, such as water waves and droplets.
@@ -198,5 +209,5 @@ python3 examples/CFD/cavity2d.py
 
 - 🪨 **Particle Flows and Discrete Element Method:** Incorporating particle-based methods for granular and particulate flows.
 
-- 🔧 **Better Geometry Processing Pipelines:** Improving the handling and preprocessing of complex geometries for simulations.
+- 🔧 **Better Geometry Processing Pipelines:** Improving the handling and preprocessing of complex geometries for simulations. -->
 
