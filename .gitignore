@@ -1,10 +1,9 @@
-# tmp
-examples/multiphase
 # Editors
 .vscode/
 .idea/
-.zed/
+misc/
 pyrightconfig.json
+tasks.json
 
 # Outputs
 *vti

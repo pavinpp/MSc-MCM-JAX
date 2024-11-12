@@ -7,11 +7,11 @@ class Lattice(object):
     """
     This class represents a lattice in the Lattice Boltzmann Method.
 
-    It stores the properties of the lattice, including the dimensions, the number of 
-    velocities, the velocity vectors, the weights, the moments, and the indices of the 
+    It stores the properties of the lattice, including the dimensions, the number of
+    velocities, the velocity vectors, the weights, the moments, and the indices of the
     opposite, main, right, and left velocities.
 
-    The class also provides methods to construct these properties based on the name of the 
+    The class also provides methods to construct these properties based on the name of the
     lattice.
 
     Parameters
@@ -20,10 +20,11 @@ class Lattice(object):
         The name of the lattice, which specifies the dimensions and the number of velocities.
         For example, "D2Q9" represents a 2D lattice with 9 velocities.
     precision: str, optional
-        The precision of the computations. It can be "f32/f32", "f32/f16", "f64/f64", 
-        "f64/f32", or "f64/f16". The first part before the slash is the precision of the 
+        The precision of the computations. It can be "f32/f32", "f32/f16", "f64/f64",
+        "f64/f32", or "f64/f16". The first part before the slash is the precision of the
         computations, and the second part after the slash is the precision of the outputs.
     """
+
     def __init__(self, name, precision="f32/f32") -> None:
         self.name = name
         dq = re.findall(r"\d+", name)
@@ -52,7 +53,7 @@ class Lattice(object):
         """
         This function constructs the indices of the opposite velocities for each velocity.
 
-        The opposite velocity of a velocity is the velocity that has the same magnitude but the 
+        The opposite velocity of a velocity is the velocity that has the same magnitude but the
         opposite direction.
 
         Returns
@@ -63,10 +64,10 @@ class Lattice(object):
         c = self.c.T
         opposite = np.array([c.tolist().index((-c[i]).tolist()) for i in range(self.q)])
         return opposite
-    
+
     def construct_right_indices(self):
         """
-        This function constructs the indices of the velocities that point in the positive 
+        This function constructs the indices of the velocities that point in the positive
         x-direction.
 
         Returns
@@ -76,10 +77,10 @@ class Lattice(object):
         """
         c = self.c.T
         return np.nonzero(c[:, 0] == 1)[0]
-    
+
     def construct_left_indices(self):
         """
-        This function constructs the indices of the velocities that point in the negative 
+        This function constructs the indices of the velocities that point in the negative
         x-direction.
 
         Returns
@@ -89,7 +90,7 @@ class Lattice(object):
         """
         c = self.c.T
         return np.nonzero(c[:, 0] == -1)[0]
-    
+
     def construct_main_indices(self):
         """
         This function constructs the indices of the main velocities.
@@ -106,14 +107,16 @@ class Lattice(object):
             return np.nonzero((np.abs(c[:, 0]) + np.abs(c[:, 1]) == 1))[0]
 
         elif self.d == 3:
-            return np.nonzero((np.abs(c[:, 0]) + np.abs(c[:, 1]) + np.abs(c[:, 2]) == 1))[0]
+            return np.nonzero(
+                (np.abs(c[:, 0]) + np.abs(c[:, 1]) + np.abs(c[:, 2]) == 1)
+            )[0]
 
     def construct_lattice_velocity(self):
         """
         This function constructs the velocity vectors of the lattice.
 
-        The velocity vectors are defined based on the name of the lattice. For example, for a D2Q9 
-        lattice, there are 9 velocities: (0,0), (1,0), (-1,0), (0,1), (0,-1), (1,1), (-1,-1), 
+        The velocity vectors are defined based on the name of the lattice. For example, for a D2Q9
+        lattice, there are 9 velocities: (0,0), (1,0), (-1,0), (0,1), (0,-1), (1,1), (-1,-1),
         (1,-1), and (-1,1).
 
         Returns
@@ -122,8 +125,8 @@ class Lattice(object):
             The velocity vectors of the lattice.
         """
         if self.name == "D2Q9":  # D2Q9
-            cx = [0, 0, 0, 1, -1, 1, -1, 1, -1]
-            cy = [0, 1, -1, 0, 1, -1, 0, 1, -1]
+            cx = [0, 1, 0, -1, 0, 1, -1, -1, 1]
+            cy = [0, 0, 1, 0, -1, 1, 1, -1, -1]
             c = np.array(tuple(zip(cx, cy)))
         elif self.name == "D3Q19":  # D3Q19
             c = [(x, y, z) for x in [0, -1, 1] for y in [0, -1, 1] for z in [0, -1, 1]]
@@ -141,8 +144,8 @@ class Lattice(object):
         """
         This function constructs the weights of the lattice.
 
-        The weights are defined based on the name of the lattice. For example, for a D2Q9 lattice, 
-        the weights are 4/9 for the rest velocity, 1/9 for the main velocities, and 1/36 for the 
+        The weights are defined based on the name of the lattice. For example, for a D2Q9 lattice,
+        the weights are 4/9 for the rest velocity, 1/9 for the main velocities, and 1/36 for the
         diagonal velocities.
 
         Returns
@@ -179,8 +182,8 @@ class Lattice(object):
         """
         This function constructs the moments of the lattice.
 
-        The moments are the products of the velocity vectors, which are used in the computation of 
-        the equilibrium distribution functions and the collision operator in the Lattice Boltzmann 
+        The moments are the products of the velocity vectors, which are used in the computation of
+        the equilibrium distribution functions and the collision operator in the Lattice Boltzmann
         Method (LBM).
 
         Returns
@@ -202,15 +205,16 @@ class Lattice(object):
                 cntr += 1
 
         return cc
-    
+
     def __str__(self):
         return self.name
+
 
 class LatticeD2Q9(Lattice):
     """
     Lattice class for 2D D2Q9 lattice.
 
-    D2Q9 stands for two-dimensional nine-velocity model. It is a common model used in the 
+    D2Q9 stands for two-dimensional nine-velocity model. It is a common model used in the
     Lat tice Boltzmann Method for simulating fluid flows in two dimensions.
 
     Parameters
@@ -218,6 +222,7 @@ class LatticeD2Q9(Lattice):
     precision: str, optional
         The precision of the lattice. The default is "f32/f32"
     """
+
     def __init__(self, precision="f32/f32"):
         super().__init__("D2Q9", precision)
         self._set_constants()
@@ -235,7 +240,7 @@ class LatticeD3Q19(Lattice):
     """
     Lattice class for 3D D3Q19 lattice.
 
-    D3Q19 stands for three-dimensional nineteen-velocity model. It is a common model used in the 
+    D3Q19 stands for three-dimensional nineteen-velocity model. It is a common model used in the
     Lattice Boltzmann Method for simulating fluid flows in three dimensions.
 
     Parameters
@@ -243,6 +248,7 @@ class LatticeD3Q19(Lattice):
     precision: str, optional
         The precision of the lattice. The default is "f32/f32"
     """
+
     def __init__(self, precision="f32/f32"):
         super().__init__("D3Q19", precision)
         self._set_constants()
@@ -261,7 +267,7 @@ class LatticeD3Q27(Lattice):
     """
     Lattice class for 3D D3Q27 lattice.
 
-    D3Q27 stands for three-dimensional twenty-seven-velocity model. It is a common model used in the 
+    D3Q27 stands for three-dimensional twenty-seven-velocity model. It is a common model used in the
     Lattice Boltzmann Method for simulating fluid flows in three dimensions.
 
     Parameters

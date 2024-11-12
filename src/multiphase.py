@@ -4,6 +4,7 @@ Definition of Multiphase class for simulating a multiphase flow.
 
 import operator
 import time
+
 # System libraries
 from functools import partial
 
@@ -13,14 +14,14 @@ import numpy as np
 import orbax.checkpoint as orb
 from jax import jit
 from jax.experimental.multihost_utils import process_allgather
-from jax.experimental.shard_map import shard_map
+
 # Third-party libraries
-from jax.sharding import PartitionSpec
 from jax.tree import map, reduce
 from termcolor import colored
 
-from src.lattice import LatticeD2Q9, LatticeD3Q19
 # User-defined libraries
+from src.boundary_conditions import BounceBack, BounceBackHalfway, BounceBackMoving
+from src.lattice import LatticeD2Q9, LatticeD3Q19
 from src.models import BGKSim
 from src.utils import downsample_field
 
@@ -35,12 +36,18 @@ class Multiphase(BGKSim):
 
     Parameters
     ----------
-    R: float
+    k: float
+        Modification coefficient, used to tune surface tension.
+    A: float
+       Weighting factor, used for linear combination of Shan-Chen and Zhang-Chen Forces
+    a: float or list
+        EOS parameter `a`
+    b: float or list
+        EOS parameter `b`
+    R: float or list
         Gas constant
     T: float
         Temperature
-    beta: float
-        Weighting factor used for force calculation.
     g_kk: numpy.ndarray
         Inter component interaction strength. Its a matrix of size n_components x n_components. It must be symmetric.
     g_ks: list
@@ -54,23 +61,17 @@ class Multiphase(BGKSim):
     2. Yuan, Peng, and Laura Schaefer. “Equations of State in a Lattice Boltzmann Model.”
         Physics of Fluids 18, no. 4 (April 3, 2006): 042101. https://doi.org/10.1063/1.2187070.
 
-    3. Pan, C., M. Hilpert, and C. T. Miller. “Lattice-Boltzmann Simulation of Two-Phase Flow in Porous Media.”
-        Water Resources Research 40, no. 1 (2004). https://doi.org/10.1029/2003WR002120.
-
-    4. Kang, Qinjun, Dongxiao Zhang, and Shiyi Chen. “Displacement of a Two-Dimensional Immiscible Droplet in a Channel.”
-        Physics of Fluids 14, no. 9 (September 1, 2002): 3203-14. https://doi.org/10.1063/1.1499125
-
-    5. Gong, Shuai, and Ping Cheng. “Numerical Investigation of Droplet Motion and Coalescence by an Improved Lattice Boltzmann
-        Model for Phase Transitions and Multiphase Flows.” Computers & Fluids 53 (January 15, 2012): 93-104.
-        https://doi.org/10.1016/j.compfluid.2011.09.013.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.k = kwargs.get("k")
+        self.A = kwargs.get("A", -0.26)
+        self.a = kwargs.get("a")
+        self.b = kwargs.get("b")
         self.R = kwargs.get("R", 0.0)
         self.T = kwargs.get("T", 0.0)
-        self.beta = kwargs.get("beta")
-        self.n_components = kwargs.get("n_components")
+        self.n_components = len(self.a)
         self.g_kkprime = kwargs.get("g_kkprime")  # Fluid-fluid interaction strength
         self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
         self.force = kwargs.get("body_force", None)
@@ -84,7 +85,7 @@ class Multiphase(BGKSim):
         )
 
         self.solid_mask_streamed = self.get_solid_mask_streamed()
-        
+        self.force = self.get_force()
 
     @property
     def omega(self):
@@ -92,9 +93,46 @@ class Multiphase(BGKSim):
 
     @omega.setter
     def omega(self, value):
-        if not isinstance(value, list) and not isinstance(value, jax.numpy.ndarray):
-            raise ValueError("omega must be a list or jax.numpy.ndarray")
+        if not isinstance(value, list):
+            raise ValueError("omega must be a list")
         self._omega = value
+
+    @property
+    def k(self):
+        return self._k
+
+    @k.setter
+    def k(self, value):
+        if value is None:
+            raise ValueError("Gas constant value must be provided")
+        if value < 0:
+            raise ValueError(
+                "Modification coefficient is used for surface tension adjustment, it cannot be negative"
+            )
+        if isinstance(value, float) or isinstance(value, int):
+            self._R = [value]
+        elif isinstance(value, list):
+            self._R = value
+        else:
+            raise ValueError(
+                "Modification coefficient k must be int, float or a list (for a multi-component flows)"
+            )
+        self._k = value
+
+    @property
+    def A(self):
+        return self._A
+
+    @A.setter
+    def A(self, value):
+        if value is None:
+            raise ValueError("Weight coefficient value must be provided")
+        if isinstance(value, float) or isinstance(value, int):
+            self._A = [value]
+        elif isinstance(value, list):
+            self._A = value
+        else:
+            raise ValueError("Weight coefficient A must be int, float or a list")
 
     @property
     def R(self):
@@ -102,7 +140,16 @@ class Multiphase(BGKSim):
 
     @R.setter
     def R(self, value):
-        self._R = value
+        if value is None:
+            raise ValueError("Gas constant value must be provided")
+        if isinstance(value, float) or isinstance(value, int):
+            self._R = [value]
+        elif isinstance(value, list):
+            self._R = value
+        else:
+            raise ValueError(
+                "Gas constant must be int, float or a list (for a multi-component flows)"
+            )
 
     @property
     def T(self):
@@ -110,27 +157,43 @@ class Multiphase(BGKSim):
 
     @T.setter
     def T(self, value):
+        if value is None:
+            raise ValueError("Temperature value must be provided")
         self._T = value
 
     @property
-    def beta(self):
-        return self._beta
+    def a(self):
+        return self._a
 
-    @beta.setter
-    def beta(self, value):
-        self._beta = value
+    @a.setter
+    def a(self, value):
+        if value is None:
+            raise ValueError("EOS parameter a must be provided EOS")
+        if isinstance(value, float) or isinstance(value, int):
+            self._a = [value]
+        elif isinstance(value, list):
+            self._a = value
+        else:
+            raise ValueError(
+                "EOS parameter a must be int, float or a list (for multi-component flows)"
+            )
 
     @property
-    def n_components(self):
-        return self._n_components
+    def b(self):
+        return self._b
 
-    @n_components.setter
-    def n_components(self, value):
+    @b.setter
+    def b(self, value):
         if value is None:
-            raise ValueError("n_components must be provided for multiphase simulation")
-        if not isinstance(value, int):
-            raise ValueError("n_components must be an integer")
-        self._n_components = value
+            raise ValueError("EOS parameter b must be provided EOS")
+        if isinstance(value, float) or isinstance(value, int):
+            self._b = [value]
+        elif isinstance(value, list):
+            self._b = value
+        else:
+            raise ValueError(
+                "EOS parameter b must be int, float or a list (for multi-component flows)"
+            )
 
     @property
     def g_kkprime(self):
@@ -167,17 +230,43 @@ class Multiphase(BGKSim):
         Parameters
         ----------
         None
-        
+
         Returns
         -------
         numpy.ndarray: solid_mask array. Dimension: (nx, ny, 1) for d == 2 and (nx, ny, nz, 1) for d == 3
         """
-        solid_halo_list = [np.array(bc.indices).T for bc in self.BCs if bc.isSolid]
-        solid_halo_voxels = np.unique(np.vstack(solid_halo_list), axis=0) if solid_halo_list else None
-        shape = (self.nx, self.ny, 1) if self.dim == 2 else (self.nx, self.ny, self.nz, 1)
-        self.solid_mask = np.zeros(shape=shape, dtype=np.int8)
-        solid_mask_repeated = jnp.repeat(jnp.array(self.solid_mask, dtype=jnp.int8), axis=-1, repeats=self.q)
-        return self.streaming(solid_mask_repeated)
+        solid_indices = []
+        for bc in self.BCs:
+            if (
+                isinstance(bc, BounceBack)
+                or isinstance(bc, BounceBackHalfway)
+                or isinstance(bc, BounceBackMoving)
+            ):
+                solid_indices.append(np.array(bc.indices).T)
+        solid_index = None
+        if not len(solid_indices) == 0:
+            solid_index = np.vstack(solid_indices)
+        if self.dim == 2:
+            shape = (self.nx, self.ny, 1)
+            solid_mask = jnp.zeros(shape, dtype=jnp.int8)
+            if solid_index is not None:
+                solid_mask = solid_mask.at[solid_index[:, 0], solid_index[:, 1], 0].set(
+                    1
+                )
+        else:
+            shape = (self.nx, self.ny, self.nz, 1)
+            solid_mask = jnp.zeros(shape, dtype=jnp.int8)
+            if solid_index is not None:
+                solid_mask = solid_mask.at[
+                    solid_index[:, 0], solid_index[:, 1], solid_index[:, 2], 0
+                ].set(1)
+        return self.streaming(
+            jnp.repeat(
+                solid_mask,
+                axis=-1,
+                repeats=self.q,
+            )
+        )
 
     @partial(jit, static_argnums=(0, 3))
     def equilibrium(self, rho_tree, u_tree, cast_output=True):
@@ -195,13 +284,13 @@ class Multiphase(BGKSim):
 
         Returns
         -------
-        feq: pytree of jax.numpy.ndarray
+        feq_tree: pytree of jax.numpy.ndarray
             Pytree of equillibrium distribution.
         """
         if cast_output:
             cast = lambda x: self.precisionPolicy.cast_to_compute(x)
-            rho_tree  = map(cast, rho_tree)
-            u_tree  = map(cast, u_tree)
+            rho_tree = map(cast, rho_tree)
+            u_tree = map(cast, u_tree)
 
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype)
         cu_tree = map(lambda u: 3.0 * jnp.dot(u, c), u_tree)
@@ -210,17 +299,15 @@ class Multiphase(BGKSim):
         )
         feq_tree = map(
             lambda rho, udote, udotu: rho
-                * self.w
-                * (1.0 + udote * (1.0 + 0.5 * udote) - udotu),
+            * self.w
+            * (1.0 + udote * (1.0 + 0.5 * udote) - udotu),
             rho_tree,
             cu_tree,
             usqr_tree,
         )
 
         if cast_output:
-            return map(
-                lambda f_eq: self.precisionPolicy.cast_to_output(f_eq), feq_tree
-            )
+            return map(lambda f_eq: self.precisionPolicy.cast_to_output(f_eq), feq_tree)
         else:
             return feq_tree
 
@@ -229,13 +316,11 @@ class Multiphase(BGKSim):
         """
         BGK collision step for lattice, extended to pytrees.
 
-        The collision step is where the main physics of the LBM is applied. In the BGK approximation, 
+        The collision step is where the main physics of the LBM is applied. In the BGK approximation,
         the distribution function is relaxed towards the equilibrium distribution function.
         """
-        fin_tree = map(
-            lambda fin: self.precisionPolicy.cast_to_compute(fin), fin_tree
-        )
-        rho_tree, u_tree = self.compute_macroscopic_variables(fin_tree)
+        fin_tree = map(lambda fin: self.precisionPolicy.cast_to_compute(fin), fin_tree)
+        rho_tree, u_tree = self.update_macroscopic(fin_tree)
         feq_tree = self.equilibrium(rho_tree, u_tree, cast_output=False)
         fneq_tree = map(lambda feq, fin: feq - fin, feq_tree, fin_tree)
         fout_tree = map(
@@ -244,24 +329,15 @@ class Multiphase(BGKSim):
 
         fout_tree = self.apply_force(fout_tree, feq_tree, rho_tree, u_tree)
 
-        return map(
-            lambda fout: self.precisionPolicy.cast_to_output(fout), fout_tree
-        )
+        return map(lambda fout: self.precisionPolicy.cast_to_output(fout), fout_tree)
 
     def compute_ff_greens_function(self):
         """
-        Define the Green's function used to model interaction of kth fluid with all components.
+        Define the Green's function used to compute interaction phase-phase interaction forces.
 
-        During computation, this G_ff is multiplied with corresponding g_kkprime value to get the Green's function:
+        The interaction coefficient between k^th and kprime^th component: self.gkkprime[k, kprime]
+        During computation, this value is multiplied with corresponding g_kkprime value to get the Green's function:
         G_kkprime = self.g_kk[k, k_prime] * self.G_ff
-
-        Green's function used in this case:
-
-        G_ff(x, x') = g1,                   if |x - x'| = 1
-                    = g2,                   if |x - x'| = sqrt(2)
-                    = 0,                    otherwise
-
-        which when multiplied with g_kkprime gives:
 
         G_kkprime(x, x') = g1 * g_kkprime,  if |x - x'| = 1
                          = g2 * g_kkprime,  if |x - x'| = sqrt(2)
@@ -275,8 +351,6 @@ class Multiphase(BGKSim):
         For D3Q19
             g1 = 1 and g2 = 1/2
 
-        By default, lattice weights (self.lattice.w) is used as G_ff
-
         Parameters
         ----------
         None
@@ -286,18 +360,20 @@ class Multiphase(BGKSim):
         G_ff: jax.numpy.ndarray.
             Dimension: (q, )
         """
-        # e = np.array(self.lattice.e).T
-        # G_ff = np.zeros((self.q,), dtype=np.float64)
-        # el = np.linalg.norm(e, axis=-1)
-        # g2 = 0.5
-        # if isinstance(self.lattice, LatticeD2Q9):
-        #     g1 = 2.0
-        # elif isinstance(self.lattice, LatticeD3Q19):
-        #     g1 = 1.0
-        # G_ff[np.isclose(el, 1.0, atol=1e-6)] = g1
-        # G_ff[np.isclose(el, jnp.sqrt(2.0), atol=1e-6)] = g2
-        # return jnp.array(G_ff, dtype=self.precisionPolicy.compute_dtype)
-        return jnp.array(self.lattice.w, dtype=self.precisionPolicy.compute_dtype)
+        c = np.array(self.lattice.c).T
+        G_ff = np.zeros((self.q,), dtype=np.float64)
+        cl = np.linalg.norm(c, axis=-1)
+        if isinstance(self.lattice, LatticeD2Q9):
+            g1 = 1 / 3
+            g2 = 1 / 12
+            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+        elif isinstance(self.lattice, LatticeD3Q19):
+            g1 = 1 / 6
+            g2 = 1 / 12
+            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+        return jnp.array(G_ff, dtype=self.precisionPolicy.compute_dtype)
 
     def compute_fs_greens_function(self):
         """
@@ -307,13 +383,6 @@ class Multiphase(BGKSim):
         G_ks = self.g_ks[k] * self.G_fs
 
         Green's function used in this case:
-
-        G_fs(x, x') = g1,              if |x - x'| = 1
-                    = g2,              if |x - x'| = sqrt(2)
-                    = 0,               otherwise
-
-        which when multiplied with g_ks gives:
-
         G_ks(x, x') = g1 * g_ks,       if |x - x'| = 1
                     = g2 * g_ks,       if |x - x'| = sqrt(2)
                     = 0,               otherwise
@@ -323,8 +392,6 @@ class Multiphase(BGKSim):
             g1 = 2 and g2 = 1/2
         For D3Q19
             g1 = 1 and g2 = 1/2
-
-        Again, d is the dimension of the problem
 
         Parameters
         ----------
@@ -336,15 +403,18 @@ class Multiphase(BGKSim):
             Dimension: (q, )
         """
         c = np.array(self.lattice.c).T
+        cl = np.linalg.norm(c, axis=-1)
         G_fs = np.zeros((self.q,), dtype=np.float64)
-        el = np.linalg.norm(c, axis=-1)
-        g2 = 0.5
         if isinstance(self.lattice, LatticeD2Q9):
-            g1 = 2.0
+            g1 = 1 / 3
+            g2 = 1 / 12
+            G_fs[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         elif isinstance(self.lattice, LatticeD3Q19):
-            g1 = 1.0
-        G_fs[np.isclose(el, 1.0, atol=1e-6)] = g1
-        G_fs[np.isclose(el, jnp.sqrt(2.0), atol=1e-6)] = g2
+            g1 = 1 / 6
+            g2 = 1 / 12
+            G_fs[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         return jnp.array(G_fs, dtype=self.precisionPolicy.compute_dtype)
 
     def initialize_macroscopic_fields(self):
@@ -390,7 +460,11 @@ class Multiphase(BGKSim):
         f: pytree of distributed JAX array of shape: (self.nx, self.ny, self.q) for 2D and (self.nx, self.ny, self.nz, self.q) for 3D.
         """
         rho0_tree, u0_tree = self.initialize_macroscopic_fields()
-        shape = (self.nx, self.ny, self.q) if self.dim == 2 else (self.nx, self.ny, self.nz, self.q)
+        shape = (
+            (self.nx, self.ny, self.q)
+            if self.dim == 2
+            else (self.nx, self.ny, self.nz, self.q)
+        )
         f_tree = []
         if rho0_tree is not None and u0_tree is not None:
             assert (
@@ -414,27 +488,12 @@ class Multiphase(BGKSim):
         return f_tree
 
     @partial(jit, static_argnums=(0,))
-    def compute_rho(self, f_tree):
+    def update_macroscopic(
+        self,
+        f_tree,
+    ):
         """
-        Compute the number density for all fluids using the respective distribution function.
-
-        Parameters
-        ----------
-        f_tree: pytree of jax.numpy.ndarray
-            Pytree of distribution arrays.
-
-        Returns
-        -------
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density values.
-        """
-        rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
-        return rho_tree
-
-    @partial(jit, static_argnums=(0,))
-    def compute_macroscopic_variables(self, f_tree,):
-        """
-        compute_macroscopic_variables from base.py extended to pytrees.
+        update_macroscopic from base.py extended to pytrees.
 
         Parameters
         ----------
@@ -447,11 +506,56 @@ class Multiphase(BGKSim):
         u_tree: pytree of jax.numpy.ndarray for component velocities
         """
         rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
-        F_tree = self.compute_force(f_tree)
+        c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
         u_tree = map(
-            lambda f, rho, F: (jnp.dot(f, self.c.T) + 0.5*F) / rho, f_tree, rho_tree, F_tree
+            lambda f, rho: jnp.dot(f, c) / rho,
+            f_tree,
+            rho_tree,
         )  # Component velocity
         return rho_tree, u_tree
+
+    @partial(jit, static_argnums=(0,))
+    def macroscopic_velocity(self, f_tree):
+        """
+        macroscopic_velocity computes the velocity and incorporates forces
+        using the Exact Difference Method (EDM). This is only used for
+        post-processing and not for equilibrium distribution computation.
+
+        Parameters
+        ----------
+        f_tree: pytree of jax.numpy.ndarray
+            Pytree of distribution arrays.
+
+        Returns
+        -------
+        u_tree: pytree of jax.numpy.ndarray for component velocities
+        """
+        rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
+        c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
+        u_tree = map(
+            lambda f, rho: jnp.dot(f, c) / rho,
+            f_tree,
+            rho_tree,
+        )
+        F_tree = self.compute_force(f_tree)
+        return map(lambda rho, u, F: u + 0.5 * F / rho, rho_tree, u_tree, F_tree)
+
+    @partial(jit, static_argnums=(0,))
+    def compute_total_density(self, rho_tree):
+        """
+        Compute the total density using component velocity and density values.
+
+        Parmeters
+        ---------
+        rho_tree: Pytree of jax.numpy.ndarray
+            Pytree of component density values.
+
+        Returns
+        -------
+        jax.numpy.ndarray
+            Total density values.
+        """
+        return reduce(operator.add, rho_tree)
 
     @partial(jit, static_argnums=(0,))
     def compute_total_velocity(self, rho_tree, u_tree):
@@ -470,35 +574,8 @@ class Multiphase(BGKSim):
         jax.numpy.ndarray
             Total velocity values.
         """
-        n = reduce(
-            operator.add,
-            map(
-                lambda omega, rho, u: omega * rho * u, self.omega, rho_tree, u_tree
-            ),
-        )
-        d = reduce(
-            operator.add, map(lambda omega, rho: rho * omega, self.omega, rho_tree)
-        )
-        return n / d
-
-    @partial(jit, static_argnums=(0,))
-    def compute_total_density(self, rho_tree):
-        """
-        Compute the total density using component velocity and density values.
-
-        Parmeters
-        ---------
-        rho_tree: Pytree of jax.numpy.ndarray
-            Pytree of component density values.
-
-        Returns
-        -------
-        jax.numpy.ndarray
-            Total velocity values.
-        """
-        return reduce(
-            operator.add, map(lambda rho, omega: omega * rho, rho_tree, self.omega)
-        )
+        rho_total = self.compute_total_density(rho_tree)
+        return map(lambda rho, u: rho * u / rho_total, rho_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
     def EOS(self, rho_tree):
@@ -518,9 +595,9 @@ class Multiphase(BGKSim):
         pass
 
     @partial(jit, static_argnums=(0,))
-    def compute_psi(self, rho_tree):
+    def compute_potential(self, rho_tree):
         """
-        Compute the effective mass (psi) for each component which is required for computing interaction forces.
+        Compute the potential (psi and U) for each component which is required for computing interaction forces.
         The psi values are obtained using the corresponding EOS.
 
         Parameters
@@ -532,18 +609,22 @@ class Multiphase(BGKSim):
         -------
         psi_tree: pytree of jax.numpy.ndarray
         """
-        rho_tree = map(
-            lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree
-        )
+        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
         p_tree = self.EOS(rho_tree)
-        g_tree = list(self.g_kkprime.diagonal())
-        psi = lambda p, rho, g: jnp.sqrt(
-            jnp.abs(2 * (p - self.lattice.cs2 * rho) / (self.lattice.cs2 * g))
+        G_diag = self.g_kkprime.diagonal()
+        U_tree = map(
+            lambda p, rho: -(self.k * p - self.lattice.cs2 * rho), p_tree, rho_tree
+        )
+        phi_tree = map(
+            lambda p, rho, G: 2 * (self.k * p - self.lattice.cs2 * rho) / G,
+            p_tree,
+            rho_tree,
+            list(G_diag),
         )
         psi_tree = map(
-            psi, p_tree, rho_tree, g_tree
+            lambda phi: jnp.sqrt(phi), phi_tree
         )  # Exact value of g does not matter
-        return psi_tree
+        return psi_tree, U_tree
 
     # Compute the force using the effective mass (psi) and the interaction potential (phi)
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
@@ -561,24 +642,30 @@ class Multiphase(BGKSim):
         Pytree of jax.numpy.ndarray
         """
         rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
-        psi_tree = self.compute_psi(rho_tree)
-        fluid_fluid_force = self.compute_fluid_fluid_force(psi_tree)
+        psi_tree, U_tree = self.compute_potential(rho_tree)
+        fluid_fluid_force = self.compute_fluid_fluid_force(psi_tree, U_tree)
         fluid_solid_force = self.compute_fluid_solid_force(rho_tree)
-        return map(lambda ff, fs: ff + fs, fluid_fluid_force, fluid_solid_force)
+        if self.force is not None:
+            return map(
+                lambda ff, fs: ff + fs + self.force,
+                fluid_fluid_force,
+                fluid_solid_force,
+            )
+        else:
+            return map(lambda ff, fs: ff + fs, fluid_fluid_force, fluid_solid_force)
 
     # @partial(jit, static_argnums=(0,))
-    # def compute_fluid_fluid_force(self, psi_tree):
+    # def compute_fluid_fluid_force(self, psi_tree, U_tree):
     #     """
     #     Compute the fluid-fluid interaction force using the effective mass (psi).
-    #     The force calculation is based on the Shan-Chen method:
-    #     F(x) = -\psi_k(x) \sum_{x'} G(x, x') \psi(x') (x' - x)
-
+    #     The force calculation is based on the Shan-Chen method.
+    #
     #     Parameters
     #     ----------
     #     psi_tree: pytree of jax.numpy.ndarray
-    #         Pytree of effective mass values.
-    #     psi_s_tree: pytree of jax.numpy.ndarray
-    #         Pytree of streamed effective mass values.
+    #         Pytree of pseudo-potential (Yuan-Schaefer, with modification)
+    #     U_tree: pytree of jax.numpy.ndarray
+    #         Pytree of pseudo-potential (Zhang-Chen, with modification)
     #
     #     Returns
     #     -------
@@ -589,125 +676,122 @@ class Multiphase(BGKSim):
     #         lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
     #         psi_tree,
     #     )
+    #     U_s_tree = map(
+    #         lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree
+    #     )
     #
-    #     def ffk(g_kkprime):
+    #     def ffk_1(g_kkprime):
     #         """
+    #         Shan-Chen interaction force
     #         g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
+    #
+    #         Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
+    #         fluid nodes are considered.
     #         """
-    #         f_int = (
-    #             lambda g, psi: -0.5
-    #             * g
-    #             * jnp.dot(self.G_ff * psi, self.e.T)
-    #         )
-    #         return tree_reduce(
+    #         return reduce(
     #             operator.add,
     #             map(
-    #                 f_int,
+    #                 lambda G, psi_s: jnp.dot(
+    #                     G * self.G_ff * (1 - self.solid_mask_streamed) * psi_s, self.c.T
+    #                 ),
     #                 list(g_kkprime),
-    #                 psi_tree,
+    #                 psi_s_tree,
     #             ),
     #         )
     #
+    #     def ffk_2():
+    #         """
+    #         Zhang-Chen interaction force.
+    #
+    #         Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
+    #         fluid nodes are considered.
+    #         """
+    #         return map(
+    #             lambda U_s: jnp.dot(
+    #                 self.G_ff * (1 - self.solid_mask_streamed) * U_s, self.c.T
+    #             ),
+    #             U_s_tree,
+    #         )
+    #
     #     return map(
-    #         lambda psi, nt: -psi * nt,
+    #         lambda A, psi, nt_1, nt_2: (1 - A) * psi * nt_1 - A * nt_2,
+    #         self.A,
     #         psi_tree,
-    #         list(jax.vmap(ffk, in_axes=0)(self.g_kkprime)),
+    #         list(jax.vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
+    #         ffk_2(),
     #     )
 
     @partial(jit, static_argnums=(0,))
-    def compute_fluid_fluid_force(self, psi_tree):
-        """
-        Compute the fluid-fluid interaction force using the effective mass (psi). The improved force model works better with lower temperatures,
-        (where the original interaction force scheme underperformed, significantly deviating from the Maxwell's co-existence curve).
-
-        Parameters
-        ----------
-            psi_tree: pytree of jax.numpy.ndarray
-                Pytree of effective mass values.
-            psi_s_tree: pytree of jax.numpy.ndarray
-                Pytree of streamed effective mass values.
-
-        Returns
-        -------
-        pytree of jax.numpy.ndarray
-            Pytree of fluid-fluid interaction force.
-
-        Reference
-        ---------
-        1. Gong, Shuai, and Ping Cheng. “Numerical Investigation of Droplet Motion and Coalescence by an Improved Lattice Boltzmann
-            Model for Phase Transitions and Multiphase Flows.” Computers & Fluids 53 (January 15, 2012): 93-104.
-            https://doi.org/10.1016/j.compfluid.2011.09.013.
-        """
+    def compute_fluid_fluid_force(self, psi_tree, U_tree):
         psi_s_tree = map(
             lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
             psi_tree,
         )
-        psi_s2_tree = map(
-            lambda psi: self.streaming(
-                jnp.repeat(jnp.square(psi), axis=-1, repeats=self.q)
-            ),
-            psi_tree,
+        U_s_tree = map(
+            lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree
         )
 
         def ffk_1(g_kkprime):
-            """
-            g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
-            """
-            f_int_1 = (
-                lambda g, psi_s: jnp.dot(g * self.G_ff * psi_s, self.c.T)
-            )
             return reduce(
                 operator.add,
                 map(
-                    f_int_1,
+                    lambda G, psi, psi_s: jnp.dot(
+                        G * self.G_ff * (1 - self.solid_mask_streamed) * (psi_s - psi),
+                        self.c.T,
+                    ),
                     list(g_kkprime),
+                    psi_tree,
                     psi_s_tree,
                 ),
             )
 
-        def ffk_2(g_kkprime):
-            """
-            g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
-            """
-            f_int_2 = (
-                lambda g, psi_s2: jnp.dot(g * self.G_ff * psi_s2, self.c.T)
-            )
-            return reduce(
-                operator.add,
-                map(
-                    f_int_2,
-                    list(g_kkprime),
-                    psi_s2_tree,
+        def ffk_2():
+            return map(
+                lambda U, U_s: jnp.dot(
+                    self.G_ff * (1 - self.solid_mask_streamed) * (U_s - U), self.c.T
                 ),
+                U_tree,
+                U_s_tree,
             )
 
         return map(
-            lambda psi, nt_1, nt_2: self.beta * psi * nt_1 + 0.5*(1.0 - self.beta) * nt_2,
+            lambda A, psi, nt_1, nt_2: (1 - A) * psi * nt_1 - A * nt_2,
+            self.A,
             psi_tree,
-            list(jax.vmap(ffk_1, in_axes=0)(self.g_kkprime)),
-            list(jax.vmap(ffk_2, in_axes=0)(self.g_kkprime)),
+            list(jax.vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
+            ffk_2(),
         )
+
+    # @partial(jit, static_argnums=(0,))
+    # def compute_fluid_solid_force(self, psi_tree):
+    #     """
+    #     Compute the fluid-fluid interaction force using the effective mass (psi).
+    #
+    #     Parameters
+    #     ----------
+    #     psi_tree: Pytree of jax.numpy.ndarray
+    #         Pytree of pseudopotential of all components.
+    #
+    #     Returns
+    #     -------
+    #     Pytree of jax.numpy.ndarray
+    #         Pytree of fluid-solid interaction force.
+    #     """
+    #     return map(
+    #         lambda g_ks, psi: -g_ks
+    #         * psi
+    #         * jnp.dot(self.G_fs * self.solid_mask_streamed, self.c.T),
+    #         self.g_ks,
+    #         psi_tree,
+    #     )
 
     @partial(jit, static_argnums=(0,))
     def compute_fluid_solid_force(self, rho_tree):
-        """
-        Compute the fluid-fluid interaction force using the effective mass (psi).
-
-        Parameters
-        ----------
-        rho_tree: Pytree of jax.numpy.ndarray
-            Pytree of density of all components.
-
-        Returns
-        -------
-        Pytree of jax.numpy.ndarray
-            Pytree of fluid-solid interaction force.
-        """
-        neighbor_terms = map(
-            lambda g_ks: g_ks * jnp.dot(self.G_fs * self.solid_mask_streamed, self.c.T),
+        return map(
+            lambda g_ks, rho: -g_ks * rho * jnp.dot(self.solid_mask_streamed, self.c.T),
             self.g_ks,
+            rho_tree,
         )
-        return map(lambda rho, nt: -rho * nt, rho_tree, neighbor_terms)
 
     @partial(jit, static_argnums=(0,), inline=True)
     def apply_force(self, f_postcollision_tree, feq_tree, rho_tree, u_tree):
@@ -737,17 +821,15 @@ class Multiphase(BGKSim):
         delta_u_tree = map(lambda F, rho: F / rho, F_tree, rho_tree)
         u_temp_tree = map(lambda u, delta_u: u + delta_u, u_tree, delta_u_tree)
         feq_force_tree = self.equilibrium(rho_tree, u_temp_tree)
-        update_distribution = (
-            lambda f_postcollision, feq_force, feq: f_postcollision + feq_force - feq
-        )
         return map(
-            update_distribution, f_postcollision_tree, feq_force_tree, feq_tree
+            lambda f_postcollision, feq_force, feq: f_postcollision + feq_force - feq,
+            f_postcollision_tree,
+            feq_force_tree,
+            feq_tree,
         )
 
     @partial(jit, static_argnums=(0, 4))
-    def apply_bc(
-        self, fout_tree, fin_tree, timestep, implementation_step
-    ):
+    def apply_bc(self, fout_tree, fin_tree, timestep, implementation_step):
         """
         This function extends apply_bc to pytrees.
 
@@ -773,7 +855,7 @@ class Multiphase(BGKSim):
                 fin_tree,
                 fout_tree,
             )
-            if bc.implementation_step == implementation_step:
+            if bc.implementationStep == implementation_step:
                 if bc.isDynamic:
                     fout_tree = map(
                         lambda fin, fout: bc.apply(fout, fin, timestep),
@@ -782,9 +864,7 @@ class Multiphase(BGKSim):
                     )
                 else:
                     fout_tree = map(
-                        lambda fin, fout: fout.at[bc.indices].set(
-                            bc.apply(fout, fin)
-                        ),
+                        lambda fin, fout: fout.at[bc.indices].set(bc.apply(fout, fin)),
                         fin_tree,
                         fout_tree,
                     )
@@ -795,12 +875,12 @@ class Multiphase(BGKSim):
         """
         This function performs a single step of the LBM simulation.
 
-        It first performs the collision step, which is the relaxation of the distribution functions 
-        towards their equilibrium values. It then applies the respective boundary conditions to the 
+        It first performs the collision step, which is the relaxation of the distribution functions
+        towards their equilibrium values. It then applies the respective boundary conditions to the
         post-collision distribution functions.
 
-        The function then performs the streaming step, which is the propagation of the distribution 
-        functions in the lattice. It then applies the respective boundary conditions to the post-streaming 
+        The function then performs the streaming step, which is the propagation of the distribution
+        functions in the lattice. It then applies the respective boundary conditions to the post-streaming
         distribution functions.
 
         Parameters
@@ -819,14 +899,14 @@ class Multiphase(BGKSim):
         """
         f_postcollision_tree = self.collision(f_poststreaming_tree)
         f_postcollision_tree = self.apply_bc(
-            f_postcollision_tree, f_poststreaming_tree, timestep, "post_collision"
+            f_postcollision_tree, f_poststreaming_tree, timestep, "PostCollision"
         )
         f_poststreaming_tree = map(
             lambda f_postcollision: self.streaming(f_postcollision),
             f_postcollision_tree,
         )
         f_poststreaming_tree = self.apply_bc(
-            f_poststreaming_tree, f_postcollision_tree, timestep, "post_streaming"
+            f_poststreaming_tree, f_postcollision_tree, timestep, "PostStreaming"
         )
 
         if return_fpost:
@@ -869,7 +949,9 @@ class Multiphase(BGKSim):
                 #     f_tree, shardings
                 # )
                 try:
-                    f_tree = self.mngr.restore(latest_step, args=orb.args.StandardRestore(state))
+                    f_tree = self.mngr.restore(
+                        latest_step, args=orb.args.StandardRestore(state)
+                    )
                     print(f"Restored checkpoint at step {latest_step}.")
                 except ValueError:
                     raise ValueError(
@@ -877,7 +959,7 @@ class Multiphase(BGKSim):
                     )
 
                 start_step = latest_step + 1
-                if not (t_max  > start_step):
+                if not (t_max > start_step):
                     raise ValueError(
                         f"Simulation already exceeded maximum allowable steps (t_max  = {t_max}). Consider increasing t_max."
                     )
@@ -888,8 +970,7 @@ class Multiphase(BGKSim):
         # Loop over all time steps
         for timestep in range(start_step, t_max + 1):
             io_flag = self.ioRate > 0 and (
-                timestep % self.ioRate == 0
-                or timestep == t_max
+                timestep % self.ioRate == 0 or timestep == t_max
             )
             print_iter_flag = (
                 self.printInfoRate > 0 and timestep % self.printInfoRate == 0
@@ -900,7 +981,7 @@ class Multiphase(BGKSim):
 
             if io_flag:
                 # Update the macroscopic variables and save the previous values (for error computation)
-                rho_prev_tree, u_prev_tree = self.compute_macroscopic_variables(f_tree)
+                rho_prev_tree, u_prev_tree = self.update_macroscopic(f_tree)
                 rho_prev_tree = map(
                     lambda rho_prev: downsample_field(
                         rho_prev, self.downsamplingFactor
@@ -920,15 +1001,11 @@ class Multiphase(BGKSim):
                 u_total_prev = self.compute_total_velocity(rho_prev_tree, u_prev_tree)
 
                 # Gather the data from all processes and convert it to numpy arrays (move to host memory)
-                p_prev_tree = map(
-                    lambda p_prev: process_allgather(p_prev), p_prev_tree
-                )
+                p_prev_tree = map(lambda p_prev: process_allgather(p_prev), p_prev_tree)
                 rho_prev_tree = map(
                     lambda rho_prev: process_allgather(rho_prev), rho_prev_tree
                 )
-                u_prev_tree = map(
-                    lambda u_prev: process_allgather(u_prev), u_prev_tree
-                )
+                u_prev_tree = map(lambda u_prev: process_allgather(u_prev), u_prev_tree)
                 rho_total_prev = process_allgather(rho_total_prev)
                 u_total_prev = process_allgather(u_total_prev)
 
@@ -939,16 +1016,16 @@ class Multiphase(BGKSim):
             if print_iter_flag:
                 print(
                     colored("Timestep ", "blue")
-                        + colored(f"{timestep}", "green")
-                        + colored(" of ", "blue")
-                        + colored(f"{t_max}", "green")
-                        + colored(" completed", "blue")
+                    + colored(f"{timestep}", "green")
+                    + colored(" of ", "blue")
+                    + colored(f"{t_max}", "green")
+                    + colored(" completed", "blue")
                 )
 
             if io_flag:
                 # Save the simulation data
                 print(f"Saving data at timestep {timestep}/{t_max}")
-                rho_tree, u_tree = self.compute_macroscopic_variables(f_tree)
+                rho_tree, u_tree = self.update_macroscopic(f_tree)
                 p_tree = self.EOS(rho_tree)
                 p_tree = map(
                     lambda p: downsample_field(p, self.downsamplingFactor), p_tree
@@ -990,9 +1067,7 @@ class Multiphase(BGKSim):
 
             if checkpoint_flag:
                 # Save the checkpoint
-                print(
-                    f"Saving checkpoint at timestep {timestep}/{t_max}"
-                )
+                print(f"Saving checkpoint at timestep {timestep}/{t_max}")
                 state = {}
                 c_name = lambda i: f"component_{i}"
                 for i in range(self.n_components):
@@ -1012,41 +1087,42 @@ class Multiphase(BGKSim):
             if self.dim == 2:
                 print(
                     colored("Domain: ", "blue")
-                        + colored(f"{self.nx} x {self.ny}", "green")
+                    + colored(f"{self.nx} x {self.ny}", "green")
                     if self.dim == 2
                     else colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
                 )
                 print(
                     colored("Number of voxels: ", "blue")
-                        + colored(f"{self.nx * self.ny}", "green")
+                    + colored(f"{self.nx * self.ny}", "green")
                     if self.dim == 2
                     else colored(f"{self.nx * self.ny * self.nz}", "green")
                 )
                 print(
                     colored("MLUPS: ", "blue")
-                        + colored(
-                            f"{self.nx * self.ny * t_max / (end - start) / 1e6}",
-                            "red",
-                        )
+                    + colored(
+                        f"{self.nx * self.ny * t_max / (end - start) / 1e6}",
+                        "red",
+                    )
                 )
 
             elif self.dim == 3:
                 print(
                     colored("Domain: ", "blue")
-                        + colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
+                    + colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
                 )
                 print(
                     colored("Number of voxels: ", "blue")
-                        + colored(f"{self.nx * self.ny * self.nz}", "green")
+                    + colored(f"{self.nx * self.ny * self.nz}", "green")
                 )
                 print(
                     colored("MLUPS: ", "blue")
-                        + colored(
-                            f"{self.nx * self.ny * self.nz * t_max / (end - start) / 1e6}",
-                            "red",
-                        )
+                    + colored(
+                        f"{self.nx * self.ny * self.nz * t_max / (end - start) / 1e6}",
+                        "red",
+                    )
                 )
-
+        if self.mngr is not None:
+            self.mngr.wait_until_finished()
         return f_tree
 
     def handle_io_timestep(
@@ -1119,7 +1195,7 @@ class Multiphase(BGKSim):
         self.output_data(**kwargs)
 
 
-class VanderWaals(Multiphase):
+class VanderWaal(Multiphase):
     """
     Define multiphase model using the VanderWaals EOS.
 
@@ -1142,75 +1218,56 @@ class VanderWaals(Multiphase):
         self.a = kwargs.get("a")
         self.b = kwargs.get("b")
 
-    @property
-    def a(self):
-        return self._a
-
-    @a.setter
-    def a(self, value):
-        if value is None:
-            raise ValueError("a value must be provided for using VanderWaals EOS")
-        self._a = value
-
-    @property
-    def b(self):
-        return self._b
-
-    @b.setter
-    def b(self, value):
-        if value is None:
-            raise ValueError("b value must be provided for using VanderWaals EOS")
-        self._b = value
+    def set_temperature(self, T):
+        self.T = T
 
     @partial(jit, static_argnums=(0,))
     def EOS(self, rho_tree):
-        rho_tree = map(
-            lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree
-        )
-        eos = lambda rho: (rho * self.R * self.T) / (
-            1.0 - self.b * rho
-        ) - self.a * jnp.square(rho)
-        return map(eos, rho_tree)
+        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
+        eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - a * rho**2
+        return map(eos, self.a, self.b, self.R, rho_tree)
 
 
-class ShanChen(Multiphase):
-    """
-    Define the multiphase model using the original Shan-Chen EOS. For this class compute_psi is redefined.
-    For this case, there is no need to define R and T as they are not used in the EOS.
-
-    Parameters
-    ----------
-    rho_0: float
-        rho_0 used for computing the effective mass (psi)
-
-    Reference
-    ---------
-    1. Shan, Xiaowen, and Hudong Chen. “Lattice Boltzmann Model for Simulating Flows with Multiple Phases and Components.”
-       Physical Review E 47, no. 3 (March 1, 1993): 1815-19. https://doi.org/10.1103/PhysRevE.47.1815.
-
-    Notes
-    -----
-    The expression for psi in this case is:
-    psi = rho_0 * (1 - exp(-rho / rho_0))
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.rho_0 = kwargs.get("rho_0")
-
-    @property
-    def rho_0(self):
-        return self._rho_0
-
-    @rho_0.setter
-    def rho_0(self, value):
-        if value is None:
-            raise ValueError("rho_0 value must be provided Shan-Chen EOS")
-        self._rho_0 = value
-
-    @partial(jit, static_argnums=(0,))
-    def compute_psi(self, rho_tree):
-        return map(lambda rho: self.rho_0 * (1.0 - jnp.exp(-rho/self.rho_0)), rho_tree)
+# class ShanChen(Multiphase):
+#     """
+#     Define the multiphase model using the original Shan-Chen EOS. For this class compute_psi is redefined.
+#     For this case, there is no need to define R and T as they are not used in the EOS.
+#
+#     Parameters
+#     ----------
+#     rho_0: float
+#         rho_0 used for computing the effective mass (psi)
+#
+#     Reference
+#     ---------
+#     1. Shan, Xiaowen, and Hudong Chen. “Lattice Boltzmann Model for Simulating Flows with Multiple Phases and Components.”
+#        Physical Review E 47, no. 3 (March 1, 1993): 1815-19. https://doi.org/10.1103/PhysRevE.47.1815.
+#
+#     Notes
+#     -----
+#     The expression for psi in this case is:
+#     psi = rho_0 * (1 - exp(-rho / rho_0))
+#     """
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self.rho_0 = kwargs.get("rho_0")
+#
+#     @property
+#     def rho_0(self):
+#         return self._rho_0
+#
+#     @rho_0.setter
+#     def rho_0(self, value):
+#         if value is None:
+#             raise ValueError("rho_0 value must be provided Shan-Chen EOS")
+#         self._rho_0 = value
+#
+#     @partial(jit, static_argnums=(0,))
+#     def compute_psi(self, rho_tree):
+#         return map(
+#             lambda rho: self.rho_0 * (1.0 - jnp.exp(-rho / self.rho_0)), rho_tree
+#         )
 
 
 class Redlich_Kwong(Multiphase):
@@ -1233,38 +1290,17 @@ class Redlich_Kwong(Multiphase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.a = kwargs.get("a")
-        self.b = kwargs.get("b")
 
-    @property
-    def a(self):
-        return self._a
-
-    @a.setter
-    def a(self, value):
-        if value is None:
-            raise ValueError("a value must be provided for using Redlich-Kwong EOS")
-        self._a = value
-
-    @property
-    def b(self):
-        return self._b
-
-    @b.setter
-    def b(self, value):
-        if value is None:
-            raise ValueError("b value must be provided for using Redlich-Kwong EOS")
-        self._b = value
+    def set_temperature(self, T):
+        self.T = T
 
     @partial(jit, static_argnums=(0,))
     def EOS(self, rho_tree):
-        rho_tree = map(
-            lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree
-        )
-        eos = lambda rho: (rho * self.R * self.T) / (1.0 - self.b * rho) - (
-            self.a * rho**2
-        ) / (self.T**0.5 * (1.0 + self.b * rho))
-        return map(eos, rho_tree)
+        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
+        eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
+            a * rho**2
+        ) / (np.sqrt(self.T) * (1.0 + b * rho))
+        return map(eos, self.a, self.b, self.R, rho_tree)
 
 
 class Redlich_Kwong_Soave(Multiphase):
@@ -1287,53 +1323,50 @@ class Redlich_Kwong_Soave(Multiphase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.a = kwargs.get("a")
-        self.b = kwargs.get("b")
-        self.alpha = kwargs.get("alpha")
+        self.rks_omega = kwargs.get("RKS_omega")
+        self.set_alpha()
 
     @property
-    def a(self):
-        return self._a
+    def rks_omega(self):
+        return self._rks_omega
 
-    @a.setter
-    def a(self, value):
+    @rks_omega.setter
+    def rks_omega(self, value):
         if value is None:
             raise ValueError(
-                "a value must be provided for using Redlich-Kwong-Soave EOS"
+                "rks_omega value must be provided for using Redlich-Kwong EOS"
             )
-        self._a = value
+        self._rks_omega = value
 
-    @property
-    def b(self):
-        return self._b
-
-    @b.setter
-    def b(self, value):
-        if value is None:
-            raise ValueError(
-                "b value must be provided for using Redlich-Kwong-Soave EOS"
+    def set_alpha(self):
+        Tc_tree = map(
+            lambda a, b, R: (a / b) * (0.08664 / 0.42784) * (1 / R),
+            self.a,
+            self.b,
+            self.R,
+        )
+        self.alpha = map(
+            lambda rks_omega, Tc: (
+                1
+                + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2)
+                * (1 - np.sqrt(self.T / Tc))
             )
-        self._b = value
+            ** 2,
+            self.rks_omega,
+            Tc_tree,
+        )
 
-    @property
-    def alpha(self):
-        return self._alpha
-
-    @alpha.setter
-    def alpha(self, value):
-        if value is None:
-            raise ValueError("alpha value must be provided for using Redlich-Kwong EOS")
-        self._alpha = value
+    def set_temperature(self, T):
+        self.T = T
+        self.set_alpha()
 
     @partial(jit, static_argnums=(0,))
     def EOS(self, rho_tree):
-        rho_tree = map(
-            lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree
-        )
-        eos = lambda rho: (rho * self.R * self.T) / (1.0 - self.b * rho) - (
-            self.a * self.alpha * rho**2
-        ) / (1.0 + self.b * rho)
-        return map(eos, rho_tree)
+        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
+        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
+            a * alpha * rho**2
+        ) / (1.0 + b * rho)
+        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
 
 
 class Peng_Robinson(Multiphase):
@@ -1356,49 +1389,49 @@ class Peng_Robinson(Multiphase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.a = kwargs.get("a")
-        self.b = kwargs.get("b")
-        self.alpha = kwargs.get("alpha")
+        self.pr_omega = kwargs.get("pr_omega")
 
     @property
-    def a(self):
-        return self._a
+    def pr_omega(self):
+        return self._pr_omega
 
-    @a.setter
-    def a(self, value):
+    @pr_omega.setter
+    def pr_omega(self, value):
         if value is None:
-            raise ValueError("a value must be provided for using Peng-Robinson EOS")
-        self._a = value
+            raise ValueError(
+                "pr_omega value must be provided for using Peng-Robinson EOS"
+            )
+        self._pr_omega = value
 
-    @property
-    def b(self):
-        return self._b
+    def set_alpha(self):
+        Tc_tree = map(
+            lambda a, b, R: (a / b) * (0.0778 / 0.45724) * (1 / R),
+            self.a,
+            self.b,
+            self.R,
+        )
+        self.alpha = map(
+            lambda pr_omega, Tc: (
+                1
+                + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2)
+                * (1 - np.sqrt(self.T / Tc))
+            )
+            ** 2,
+            self.pr_omega,
+            Tc_tree,
+        )
 
-    @b.setter
-    def b(self, value):
-        if value is None:
-            raise ValueError("b value must be provided for using Peng-Robinson EOS")
-        self._b = value
-
-    @property
-    def alpha(self):
-        return self._alpha
-
-    @alpha.setter
-    def alpha(self, value):
-        if value is None:
-            raise ValueError("alpha value must be provided for using Peng-Robinson EOS")
-        self._alpha = value
+    def set_temperature(self, T):
+        self.T = T
+        self.set_alpha()
 
     @partial(jit, static_argnums=(0,))
     def EOS(self, rho_tree):
-        rho_tree = map(
-            lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree
-        )
-        eos = lambda rho: (rho * self.R * self.T) / (1.0 - self.b * rho) - (
-            self.a * self.alpha * rho**2
-        ) / (1.0 + 2 * self.b * rho - self.b**2 * rho**2)
-        return map(eos, rho_tree)
+        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
+        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
+            a * alpha * rho**2
+        ) / (1.0 + 2 * b * rho - b**2 * rho**2)
+        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
 
 
 class Carnahan_Starling(Multiphase):
@@ -1421,36 +1454,15 @@ class Carnahan_Starling(Multiphase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.a = kwargs.get("a")
-        self.b = kwargs.get("b")
 
-    @property
-    def a(self):
-        return self._a
-
-    @a.setter
-    def a(self, value):
-        if value is None:
-            raise ValueError("a value must be provided for using Carnahan-Starling EOS")
-        self._a = value
-
-    @property
-    def b(self):
-        return self._b
-
-    @b.setter
-    def b(self, value):
-        if value is None:
-            raise ValueError("b value must be provided for using Carnahan-Starling EOS")
-        self._b = value
+    def set_temperature(self, T):
+        self.T = T
 
     @partial(jit, static_argnums=(0,))
     def EOS(self, rho_tree):
-        rho_tree = map(
-            lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree
-        )
-        x_tree = map(lambda rho: 0.25 * self.b * rho, rho_tree)
-        eos = lambda rho, x: (
-            rho * self.R * self.T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)
-        ) - (self.a * rho**2)
-        return map(eos, rho_tree, x_tree)
+        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
+        x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
+        eos = lambda a, R, rho, x: (
+            rho * R * self.T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)
+        ) - (a * rho**2)
+        return map(eos, self.a, self.R, rho_tree, x_tree)
