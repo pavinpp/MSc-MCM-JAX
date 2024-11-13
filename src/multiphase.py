@@ -36,9 +36,9 @@ class Multiphase(BGKSim):
 
     Parameters
     ----------
-    k: float
+    k: list
         Modification coefficient, used to tune surface tension.
-    A: float
+    A: list
        Weighting factor, used for linear combination of Shan-Chen and Zhang-Chen Forces
     a: float or list
         EOS parameter `a`
@@ -66,7 +66,7 @@ class Multiphase(BGKSim):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.k = kwargs.get("k")
-        self.A = kwargs.get("A", -0.26)
+        self.A = kwargs.get("A")
         self.a = kwargs.get("a")
         self.b = kwargs.get("b")
         self.R = kwargs.get("R", 0.0)
@@ -104,20 +104,15 @@ class Multiphase(BGKSim):
     @k.setter
     def k(self, value):
         if value is None:
-            raise ValueError("Gas constant value must be provided")
-        if value < 0:
-            raise ValueError(
-                "Modification coefficient is used for surface tension adjustment, it cannot be negative"
-            )
+            raise ValueError("Modification coefficient must be provided")
         if isinstance(value, float) or isinstance(value, int):
-            self._R = [value]
+            self._k = [value]
         elif isinstance(value, list):
-            self._R = value
+            self._k = value
         else:
             raise ValueError(
                 "Modification coefficient k must be int, float or a list (for a multi-component flows)"
             )
-        self._k = value
 
     @property
     def A(self):
@@ -159,6 +154,8 @@ class Multiphase(BGKSim):
     def T(self, value):
         if value is None:
             raise ValueError("Temperature value must be provided")
+        if value < 0:
+            raise ValueError("Temperature cannot be negative")
         self._T = value
 
     @property
@@ -612,11 +609,17 @@ class Multiphase(BGKSim):
         rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
         p_tree = self.EOS(rho_tree)
         G_diag = self.g_kkprime.diagonal()
+        # Shan-Chen potential using modified pressure
         U_tree = map(
-            lambda p, rho: -(self.k * p - self.lattice.cs2 * rho), p_tree, rho_tree
+            lambda k, p, rho: -(k * p - self.lattice.cs2 * rho),
+            self.k,
+            p_tree,
+            rho_tree,
         )
+        # Zhang-Chen potential using modified pressure
         phi_tree = map(
-            lambda p, rho, G: 2 * (self.k * p - self.lattice.cs2 * rho) / G,
+            lambda k, p, rho, G: 2 * (k * p - self.lattice.cs2 * rho) / G,
+            self.k,
             p_tree,
             rho_tree,
             list(G_diag),
@@ -723,6 +726,25 @@ class Multiphase(BGKSim):
 
     @partial(jit, static_argnums=(0,))
     def compute_fluid_fluid_force(self, psi_tree, U_tree):
+        """
+        Compute the fluid-fluid interaction force using the effective mass (psi).
+        The force calculation is based on the Shan-Chen method using the weighted sum
+        of Shan-Chen and Zhang-Chen potential where modified pressure is used:
+
+        modified pressure = k (modification )
+
+        Parameters
+        ----------
+        psi_tree: pytree of jax.numpy.ndarray
+            Pytree of pseudo-potential (Yuan-Schaefer, with modification)
+        U_tree: pytree of jax.numpy.ndarray
+            Pytree of pseudo-potential (Zhang-Chen, with modification)
+
+        Returns
+        -------
+        pytree of jax.numpy.ndarray
+            Pytree of fluid-fluid interaction force.
+        """
         psi_s_tree = map(
             lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
             psi_tree,
@@ -732,6 +754,13 @@ class Multiphase(BGKSim):
         )
 
         def ffk_1(g_kkprime):
+            """
+            Shan-Chen interaction force
+            g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
+
+            Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
+            fluid nodes are considered.
+            """
             return reduce(
                 operator.add,
                 map(
@@ -746,6 +775,12 @@ class Multiphase(BGKSim):
             )
 
         def ffk_2():
+            """
+            Zhang-Chen interaction force.
+
+            Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
+            fluid nodes are considered.
+            """
             return map(
                 lambda U, U_s: jnp.dot(
                     self.G_ff * (1 - self.solid_mask_streamed) * (U_s - U), self.c.T
@@ -787,6 +822,19 @@ class Multiphase(BGKSim):
 
     @partial(jit, static_argnums=(0,))
     def compute_fluid_solid_force(self, rho_tree):
+        """
+        Compute the fluid-fluid interaction force using the effective mass (psi).
+
+        Parameters
+        ----------
+        psi_tree: Pytree of jax.numpy.ndarray
+            Pytree of pseudopotential of all components.
+
+        Returns
+        -------
+        Pytree of jax.numpy.ndarray
+            Pytree of fluid-solid interaction force.
+        """
         return map(
             lambda g_ks, rho: -g_ks * rho * jnp.dot(self.solid_mask_streamed, self.c.T),
             self.g_ks,
