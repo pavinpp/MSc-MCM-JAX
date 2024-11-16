@@ -64,6 +64,7 @@ class Multiphase(BGKSim):
     """
 
     def __init__(self, **kwargs):
+        self.n_components = kwargs.get("n_components")
         super().__init__(**kwargs)
         self.k = kwargs.get("k")
         self.A = kwargs.get("A")
@@ -71,7 +72,6 @@ class Multiphase(BGKSim):
         self.b = kwargs.get("b")
         self.R = kwargs.get("R", 0.0)
         self.T = kwargs.get("T", 0.0)
-        self.n_components = len(self.a)
         self.g_kkprime = kwargs.get("g_kkprime")  # Fluid-fluid interaction strength
         self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
         self.force = kwargs.get("body_force", None)
@@ -98,6 +98,20 @@ class Multiphase(BGKSim):
         self._omega = value
 
     @property
+    def n_components(self):
+        return self._n_components
+
+    @n_components.setter
+    def n_components(self, value):
+        if value is None:
+            raise ValueError("Number of components cannot be None")
+        if value <= 0:
+            raise ValueError("Number of components must be positive")
+        if not isinstance(value, int):
+            raise ValueError("Number of components must be an integer")
+        self._n_components = value
+
+    @property
     def k(self):
         return self._k
 
@@ -106,8 +120,16 @@ class Multiphase(BGKSim):
         if value is None:
             raise ValueError("Modification coefficient must be provided")
         if isinstance(value, float) or isinstance(value, int):
+            if self.n_components != 1:
+                raise ValueError(
+                    "The number of modification coefficients provided does not match the number of components in the system"
+                )
             self._k = [value]
         elif isinstance(value, list):
+            if len(value) != self.n_components:
+                raise ValueError(
+                    "The number of modification coefficients provided does not match the number of components in the system"
+                )
             self._k = value
         else:
             raise ValueError(
@@ -123,8 +145,16 @@ class Multiphase(BGKSim):
         if value is None:
             raise ValueError("Weight coefficient value must be provided")
         if isinstance(value, float) or isinstance(value, int):
+            if self.n_components != 1:
+                raise ValueError(
+                    "The number of weighting factor values provided does not match the number of components in the system"
+                )
             self._A = [value]
         elif isinstance(value, list):
+            if len(value) != self.n_components:
+                raise ValueError(
+                    "The number of weighting factor values provided does not match the number of components in the system"
+                )
             self._A = value
         else:
             raise ValueError("Weight coefficient A must be int, float or a list")
@@ -138,8 +168,16 @@ class Multiphase(BGKSim):
         if value is None:
             raise ValueError("Gas constant value must be provided")
         if isinstance(value, float) or isinstance(value, int):
+            if self.n_components != 1:
+                raise ValueError(
+                    "The number of gas constant values provided does not match the number of components in the system"
+                )
             self._R = [value]
         elif isinstance(value, list):
+            if len(value) != self.n_components:
+                raise ValueError(
+                    "The number of gas constant values provided does not match the number of components in the system"
+                )
             self._R = value
         else:
             raise ValueError(
@@ -167,8 +205,16 @@ class Multiphase(BGKSim):
         if value is None:
             raise ValueError("EOS parameter a must be provided EOS")
         if isinstance(value, float) or isinstance(value, int):
+            if self.n_components != 1:
+                raise ValueError(
+                    "The number of EOS parameter a values provided does not match the number of components in the system"
+                )
             self._a = [value]
         elif isinstance(value, list):
+            if len(value) != self.n_components:
+                raise ValueError(
+                    "The number of EOS parameter a values provided does not match the number of components in the system"
+                )
             self._a = value
         else:
             raise ValueError(
@@ -184,8 +230,16 @@ class Multiphase(BGKSim):
         if value is None:
             raise ValueError("EOS parameter b must be provided EOS")
         if isinstance(value, float) or isinstance(value, int):
+            if self.n_components != 1:
+                raise ValueError(
+                    "The number of EOS parameter b values provided does not match the number of components in the system"
+                )
             self._b = [value]
         elif isinstance(value, list):
+            if len(value) != self.n_components:
+                raise ValueError(
+                    "The number of EOS parameter b values provided does not match the number of components in the system"
+                )
             self._b = value
         else:
             raise ValueError(
@@ -233,7 +287,7 @@ class Multiphase(BGKSim):
         numpy.ndarray: solid_mask array. Dimension: (nx, ny, 1) for d == 2 and (nx, ny, nz, 1) for d == 3
         """
         solid_indices = []
-        for bc in self.BCs:
+        for bc in self.wall_BCs:
             if (
                 isinstance(bc, BounceBack)
                 or isinstance(bc, BounceBackHalfway)
@@ -264,6 +318,43 @@ class Multiphase(BGKSim):
                 repeats=self.q,
             )
         )
+
+    def _create_boundary_data(self):
+        """
+        Create boundary data for the Lattice Boltzmann simulation by setting boundary conditions,
+        creating grid mask, and preparing local masks and normal arrays.
+        """
+        self.wall_BCs = []
+        self.BCs = [[] for _ in range(self.n_components)]
+        self.set_boundary_conditions()
+        # Accumulate the indices of all BCs to create the grid mask with FALSE along directions that
+        # stream into a boundary voxel.
+        for i in range(self.n_components):
+            print(f"Component: {i+1}")
+            solid_halo_list = [
+                np.array(bc.indices).T
+                for BCs in [self.BCs[i], self.wall_BCs]
+                for bc in BCs
+                if bc.isSolid
+            ]
+            solid_halo_voxels = (
+                np.unique(np.vstack(solid_halo_list), axis=0)
+                if solid_halo_list
+                else None
+            )
+
+            # Create the grid mask on each process
+            start = time.time()
+            grid_mask = self.create_grid_mask(solid_halo_voxels)
+            print("Time to create the grid mask:", time.time() - start)
+
+            start = time.time()
+            for bc in self.BCs[i]:
+                assert bc.implementationStep in ["PostStreaming", "PostCollision"]
+                bc.create_local_mask_and_normal_arrays(grid_mask)
+            print(
+                "Time to create the local masks and normal arrays:", time.time() - start
+            )
 
     @partial(jit, static_argnums=(0, 3))
     def equilibrium(self, rho_tree, u_tree, cast_output=True):
@@ -650,9 +741,10 @@ class Multiphase(BGKSim):
         fluid_solid_force = self.compute_fluid_solid_force(rho_tree)
         if self.force is not None:
             return map(
-                lambda ff, fs: ff + fs + self.force,
+                lambda ff, fs, rho: ff + fs + self.force * rho,
                 fluid_fluid_force,
                 fluid_solid_force,
+                rho_tree,
             )
         else:
             return map(lambda ff, fs: ff + fs, fluid_fluid_force, fluid_solid_force)
@@ -883,9 +975,9 @@ class Multiphase(BGKSim):
 
         Parameters
         ----------
-        fout: jax.numpy.ndarray
+        fout_tree: jax.numpy.ndarray
             The post-collision distribution functions.
-        fin: jax.numpy.ndarray
+        fin_tree: jax.numpy.ndarray
             The post-streaming distribution functions.
         implementation_step: str
             The implementation step at which the boundary conditions should be applied.
@@ -895,27 +987,44 @@ class Multiphase(BGKSim):
         jax.numpy.ndarray
             The output distribution functions after applying the boundary conditions.
         """
-        for bc in self.BCs:
-            fout_tree = map(
-                lambda fin, fout: bc.prepare_populations(
-                    fout, fin, implementation_step
-                ),
-                fin_tree,
-                fout_tree,
-            )
+
+        # for bc in self.BCs:
+        #     fout_tree = map(
+        #         lambda fin, fout: bc.prepare_populations(
+        #             fout, fin, implementation_step
+        #         ),
+        #         fin_tree,
+        #         fout_tree,
+        #     )
+        #     if bc.implementationStep == implementation_step:
+        #         if bc.isDynamic:
+        #             fout_tree = map(
+        #                 lambda fin, fout: bc.apply(fout, fin, timestep),
+        #                 fin_tree,
+        #                 fout_tree,
+        #             )
+        #         else:
+        #             fout_tree = map(
+        #                 lambda fin, fout: fout.at[bc.indices].set(bc.apply(fout, fin)),
+        #                 fin_tree,
+        #                 fout_tree,
+        #             )
+        # return fout_tree
+        def _apply_bc_(fin, fout, bc):
+            fout = bc.prepare_populations(fout, fin, implementation_step)
             if bc.implementationStep == implementation_step:
                 if bc.isDynamic:
-                    fout_tree = map(
-                        lambda fin, fout: bc.apply(fout, fin, timestep),
-                        fin_tree,
-                        fout_tree,
-                    )
+                    fout = bc.apply(fout, fin, timestep)
                 else:
-                    fout_tree = map(
-                        lambda fin, fout: fout.at[bc.indices].set(bc.apply(fout, fin)),
-                        fin_tree,
-                        fout_tree,
-                    )
+                    fout = fout.at[bc.indices].set(bc.apply(fout, fin))
+            return fout
+
+        for i in range(self.n_components):
+            BCs = [self.BCs[i], self.wall_BCs]
+            for BC in BCs:
+                for bc in BC:
+                    fout_tree[i] = _apply_bc_(fin_tree[i], fout_tree[i], bc)
+
         return fout_tree
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))

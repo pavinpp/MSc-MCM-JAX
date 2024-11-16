@@ -73,6 +73,7 @@ class Droplet2D(Carnahan_Starling):
 
 precision = "f32/f32"
 kwargs = {
+    "n_components": 1,
     "lattice": LatticeD2Q9(precision),
     "omega": [1.0],
     "nx": nx,

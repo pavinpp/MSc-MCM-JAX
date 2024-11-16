@@ -35,7 +35,6 @@ class DropletOnWall2D(Carnahan_Starling):
         rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
             2 * (dist - r) / width
         )
-        # rho[:, 0] = 2.0 * rho_g
 
         rho = rho.reshape((nx, ny, 1))
 
@@ -50,10 +49,12 @@ class DropletOnWall2D(Carnahan_Starling):
         walls = np.concatenate(
             (self.boundingBoxIndices["bottom"], self.boundingBoxIndices["top"])
         )
-        self.BCs.append(BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy))
+        self.wall_BCs.append(
+            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+        )
 
     def output_data(self, **kwargs):
-        rho = np.array(kwargs["rho_tree"][0][:, 2:-2, :])
+        rho = np.array(kwargs["rho_prev_tree"][0][:, 2:-2, :])
         p = np.array(kwargs["p_tree"][0][:, 2:-2, :])
         u = np.array(kwargs["u_tree"][0][:, 2:-2, :])
         timestep = kwargs["timestep"]
@@ -86,6 +87,7 @@ kwargs = {
     "nx": nx,
     "ny": ny,
     "nz": 0,
+    "n_components": 1,
     "g_kkprime": -1.0 * np.ones((1, 1)),
     "g_ks": [0.15],
     "a": a,
