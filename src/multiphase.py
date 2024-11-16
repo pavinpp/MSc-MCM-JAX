@@ -603,7 +603,7 @@ class Multiphase(BGKSim):
         return rho_tree, u_tree
 
     @partial(jit, static_argnums=(0,))
-    def macroscopic_velocity(self, f_tree):
+    def macroscopic_velocity(self, f_tree, rho_tree):
         """
         macroscopic_velocity computes the velocity and incorporates forces
         using the Exact Difference Method (EDM). This is only used for
@@ -613,12 +613,14 @@ class Multiphase(BGKSim):
         ----------
         f_tree: pytree of jax.numpy.ndarray
             Pytree of distribution arrays.
+        rho_tree: pytree of jax.numpy.ndarray
+            Pytree of density values.
 
         Returns
         -------
         u_tree: pytree of jax.numpy.ndarray for component velocities
         """
-        rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
+        # rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
         u_tree = map(
             lambda f, rho: jnp.dot(f, c) / rho,
@@ -1138,7 +1140,8 @@ class Multiphase(BGKSim):
 
             if io_flag:
                 # Update the macroscopic variables and save the previous values (for error computation)
-                rho_prev_tree, u_prev_tree = self.update_macroscopic(f_tree)
+                rho_prev_tree, _ = self.update_macroscopic(f_tree)
+                u_prev_tree = self.macroscopic_velocity(f_tree, rho_prev_tree)
                 rho_prev_tree = map(
                     lambda rho_prev: downsample_field(
                         rho_prev, self.downsamplingFactor
@@ -1182,7 +1185,8 @@ class Multiphase(BGKSim):
             if io_flag:
                 # Save the simulation data
                 print(f"Saving data at timestep {timestep}/{t_max}")
-                rho_tree, u_tree = self.update_macroscopic(f_tree)
+                rho_tree, _ = self.update_macroscopic(f_tree)
+                u_tree = self.macroscopic_velocity(f_tree, rho_tree)
                 p_tree = self.EOS(rho_tree)
                 p_tree = map(
                     lambda p: downsample_field(p, self.downsamplingFactor), p_tree
