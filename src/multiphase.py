@@ -22,13 +22,13 @@ from termcolor import colored
 # User-defined libraries
 from src.boundary_conditions import BounceBack, BounceBackHalfway, BounceBackMoving
 from src.lattice import LatticeD2Q9, LatticeD3Q19
-from src.models import BGKSim
+from src.base import LBMBase
 from src.utils import downsample_field
 
 jax.config.update("jax_debug_nans", True)
 
 
-class Multiphase(BGKSim):
+class Multiphase(LBMBase):
     """
     Multiphase model, based on the Shan-Chen method. To model the fluid, an equation of state (EOS) is defined by the user.
     Sequence of computation is pressure (EOS, dependent on the density and temperature) --> effective mass (phi).
@@ -40,14 +40,6 @@ class Multiphase(BGKSim):
         Modification coefficient, used to tune surface tension.
     A: list
        Weighting factor, used for linear combination of Shan-Chen and Zhang-Chen Forces
-    a: float or list
-        EOS parameter `a`
-    b: float or list
-        EOS parameter `b`
-    R: float or list
-        Gas constant
-    T: float
-        Temperature
     g_kk: numpy.ndarray
         Inter component interaction strength. Its a matrix of size n_components x n_components. It must be symmetric.
     g_ks: list
@@ -68,10 +60,7 @@ class Multiphase(BGKSim):
         super().__init__(**kwargs)
         self.k = kwargs.get("k")
         self.A = kwargs.get("A")
-        self.a = kwargs.get("a")
-        self.b = kwargs.get("b")
-        self.R = kwargs.get("R", 0.0)
-        self.T = kwargs.get("T", 0.0)
+        self.eos = kwargs.get("EOS")
         self.g_kkprime = kwargs.get("g_kkprime")  # Fluid-fluid interaction strength
         self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
         self.force = kwargs.get("body_force", None)
@@ -86,16 +75,6 @@ class Multiphase(BGKSim):
 
         self.solid_mask_streamed = self.get_solid_mask_streamed()
         self.force = self.get_force()
-
-    @property
-    def omega(self):
-        return self._omega
-
-    @omega.setter
-    def omega(self, value):
-        if not isinstance(value, list):
-            raise ValueError("omega must be a list")
-        self._omega = value
 
     @property
     def n_components(self):
@@ -158,93 +137,6 @@ class Multiphase(BGKSim):
             self._A = value
         else:
             raise ValueError("Weight coefficient A must be int, float or a list")
-
-    @property
-    def R(self):
-        return self._R
-
-    @R.setter
-    def R(self, value):
-        if value is None:
-            raise ValueError("Gas constant value must be provided")
-        if isinstance(value, float) or isinstance(value, int):
-            if self.n_components != 1:
-                raise ValueError(
-                    "The number of gas constant values provided does not match the number of components in the system"
-                )
-            self._R = [value]
-        elif isinstance(value, list):
-            if len(value) != self.n_components:
-                raise ValueError(
-                    "The number of gas constant values provided does not match the number of components in the system"
-                )
-            self._R = value
-        else:
-            raise ValueError(
-                "Gas constant must be int, float or a list (for a multi-component flows)"
-            )
-
-    @property
-    def T(self):
-        return self._T
-
-    @T.setter
-    def T(self, value):
-        if value is None:
-            raise ValueError("Temperature value must be provided")
-        if value < 0:
-            raise ValueError("Temperature cannot be negative")
-        self._T = value
-
-    @property
-    def a(self):
-        return self._a
-
-    @a.setter
-    def a(self, value):
-        if value is None:
-            raise ValueError("EOS parameter a must be provided EOS")
-        if isinstance(value, float) or isinstance(value, int):
-            if self.n_components != 1:
-                raise ValueError(
-                    "The number of EOS parameter a values provided does not match the number of components in the system"
-                )
-            self._a = [value]
-        elif isinstance(value, list):
-            if len(value) != self.n_components:
-                raise ValueError(
-                    "The number of EOS parameter a values provided does not match the number of components in the system"
-                )
-            self._a = value
-        else:
-            raise ValueError(
-                "EOS parameter a must be int, float or a list (for multi-component flows)"
-            )
-
-    @property
-    def b(self):
-        return self._b
-
-    @b.setter
-    def b(self, value):
-        if value is None:
-            raise ValueError("EOS parameter b must be provided EOS")
-        if isinstance(value, float) or isinstance(value, int):
-            if self.n_components != 1:
-                raise ValueError(
-                    "The number of EOS parameter b values provided does not match the number of components in the system"
-                )
-            self._b = [value]
-        elif isinstance(value, list):
-            if len(value) != self.n_components:
-                raise ValueError(
-                    "The number of EOS parameter b values provided does not match the number of components in the system"
-                )
-            self._b = value
-        else:
-            raise ValueError(
-                "EOS parameter b must be int, float or a list (for multi-component flows)"
-            )
 
     @property
     def g_kkprime(self):
@@ -402,22 +294,9 @@ class Multiphase(BGKSim):
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
     def collision(self, fin_tree):
         """
-        BGK collision step for lattice, extended to pytrees.
-
-        The collision step is where the main physics of the LBM is applied. In the BGK approximation,
-        the distribution function is relaxed towards the equilibrium distribution function.
+        Apply collision step of LBM
         """
-        fin_tree = map(lambda fin: self.precisionPolicy.cast_to_compute(fin), fin_tree)
-        rho_tree, u_tree = self.update_macroscopic(fin_tree)
-        feq_tree = self.equilibrium(rho_tree, u_tree, cast_output=False)
-        fneq_tree = map(lambda feq, fin: feq - fin, feq_tree, fin_tree)
-        fout_tree = map(
-            lambda fin, fneq, omega: fin + omega * fneq, fin_tree, fneq_tree, self.omega
-        )
-
-        fout_tree = self.apply_force(fout_tree, feq_tree, rho_tree, u_tree)
-
-        return map(lambda fout: self.precisionPolicy.cast_to_output(fout), fout_tree)
+        pass
 
     def compute_ff_greens_function(self):
         """
@@ -668,23 +547,6 @@ class Multiphase(BGKSim):
         return map(lambda rho, u: rho * u / rho_total, rho_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
-    def EOS(self, rho_tree):
-        """
-        Define the equation of state for the problem. Defined in sub-classes.
-
-        Parameters
-        ----------
-        rho_tree: jax.numpy.ndarray
-            Pytree of density values.
-
-        Returns
-        -------
-        p_tree: pytree of jax.numpy.ndarray
-            Pytree of pressure values.
-        """
-        pass
-
-    @partial(jit, static_argnums=(0,))
     def compute_potential(self, rho_tree):
         """
         Compute the potential (psi and U) for each component which is required for computing interaction forces.
@@ -700,16 +562,9 @@ class Multiphase(BGKSim):
         psi_tree: pytree of jax.numpy.ndarray
         """
         rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        p_tree = self.EOS(rho_tree)
+        p_tree = self.eos.EOS(rho_tree)
         G_diag = self.g_kkprime.diagonal()
         # Shan-Chen potential using modified pressure
-        U_tree = map(
-            lambda k, p, rho: -(k * p - self.lattice.cs2 * rho),
-            self.k,
-            p_tree,
-            rho_tree,
-        )
-        # Zhang-Chen potential using modified pressure
         phi_tree = map(
             lambda k, p, rho, G: 2 * (k * p - self.lattice.cs2 * rho) / G,
             self.k,
@@ -720,6 +575,13 @@ class Multiphase(BGKSim):
         psi_tree = map(
             lambda phi: jnp.sqrt(phi), phi_tree
         )  # Exact value of g does not matter
+        # Zhang-Chen potential
+        U_tree = map(
+            lambda k, p, rho: -(k * p - self.lattice.cs2 * rho),
+            self.k,
+            p_tree,
+            rho_tree,
+        )
         return psi_tree, U_tree
 
     # Compute the force using the effective mass (psi) and the interaction potential (phi)
@@ -750,73 +612,6 @@ class Multiphase(BGKSim):
             )
         else:
             return map(lambda ff, fs: ff + fs, fluid_fluid_force, fluid_solid_force)
-
-    # @partial(jit, static_argnums=(0,))
-    # def compute_fluid_fluid_force(self, psi_tree, U_tree):
-    #     """
-    #     Compute the fluid-fluid interaction force using the effective mass (psi).
-    #     The force calculation is based on the Shan-Chen method.
-    #
-    #     Parameters
-    #     ----------
-    #     psi_tree: pytree of jax.numpy.ndarray
-    #         Pytree of pseudo-potential (Yuan-Schaefer, with modification)
-    #     U_tree: pytree of jax.numpy.ndarray
-    #         Pytree of pseudo-potential (Zhang-Chen, with modification)
-    #
-    #     Returns
-    #     -------
-    #     pytree of jax.numpy.ndarray
-    #         Pytree of fluid-fluid interaction force.
-    #     """
-    #     psi_s_tree = map(
-    #         lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
-    #         psi_tree,
-    #     )
-    #     U_s_tree = map(
-    #         lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree
-    #     )
-    #
-    #     def ffk_1(g_kkprime):
-    #         """
-    #         Shan-Chen interaction force
-    #         g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
-    #
-    #         Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
-    #         fluid nodes are considered.
-    #         """
-    #         return reduce(
-    #             operator.add,
-    #             map(
-    #                 lambda G, psi_s: jnp.dot(
-    #                     G * self.G_ff * (1 - self.solid_mask_streamed) * psi_s, self.c.T
-    #                 ),
-    #                 list(g_kkprime),
-    #                 psi_s_tree,
-    #             ),
-    #         )
-    #
-    #     def ffk_2():
-    #         """
-    #         Zhang-Chen interaction force.
-    #
-    #         Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
-    #         fluid nodes are considered.
-    #         """
-    #         return map(
-    #             lambda U_s: jnp.dot(
-    #                 self.G_ff * (1 - self.solid_mask_streamed) * U_s, self.c.T
-    #             ),
-    #             U_s_tree,
-    #         )
-    #
-    #     return map(
-    #         lambda A, psi, nt_1, nt_2: (1 - A) * psi * nt_1 - A * nt_2,
-    #         self.A,
-    #         psi_tree,
-    #         list(jax.vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
-    #         ffk_2(),
-    #     )
 
     @partial(jit, static_argnums=(0,))
     def compute_fluid_fluid_force(self, psi_tree, U_tree):
@@ -890,29 +685,6 @@ class Multiphase(BGKSim):
             list(jax.vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
             ffk_2(),
         )
-
-    # @partial(jit, static_argnums=(0,))
-    # def compute_fluid_solid_force(self, psi_tree):
-    #     """
-    #     Compute the fluid-fluid interaction force using the effective mass (psi).
-    #
-    #     Parameters
-    #     ----------
-    #     psi_tree: Pytree of jax.numpy.ndarray
-    #         Pytree of pseudopotential of all components.
-    #
-    #     Returns
-    #     -------
-    #     Pytree of jax.numpy.ndarray
-    #         Pytree of fluid-solid interaction force.
-    #     """
-    #     return map(
-    #         lambda g_ks, psi: -g_ks
-    #         * psi
-    #         * jnp.dot(self.G_fs * self.solid_mask_streamed, self.c.T),
-    #         self.g_ks,
-    #         psi_tree,
-    #     )
 
     @partial(jit, static_argnums=(0,))
     def compute_fluid_solid_force(self, rho_tree):
@@ -990,28 +762,6 @@ class Multiphase(BGKSim):
             The output distribution functions after applying the boundary conditions.
         """
 
-        # for bc in self.BCs:
-        #     fout_tree = map(
-        #         lambda fin, fout: bc.prepare_populations(
-        #             fout, fin, implementation_step
-        #         ),
-        #         fin_tree,
-        #         fout_tree,
-        #     )
-        #     if bc.implementationStep == implementation_step:
-        #         if bc.isDynamic:
-        #             fout_tree = map(
-        #                 lambda fin, fout: bc.apply(fout, fin, timestep),
-        #                 fin_tree,
-        #                 fout_tree,
-        #             )
-        #         else:
-        #             fout_tree = map(
-        #                 lambda fin, fout: fout.at[bc.indices].set(bc.apply(fout, fin)),
-        #                 fin_tree,
-        #                 fout_tree,
-        #             )
-        # return fout_tree
         def _apply_bc_(fin, fout, bc):
             fout = bc.prepare_populations(fout, fin, implementation_step)
             if bc.implementationStep == implementation_step:
@@ -1148,7 +898,7 @@ class Multiphase(BGKSim):
                     ),
                     rho_prev_tree,
                 )
-                p_prev_tree = self.EOS(rho_prev_tree)
+                p_prev_tree = self.eos.EOS(rho_prev_tree)
                 p_prev_tree = map(
                     lambda p_prev: downsample_field(p_prev, self.downsamplingFactor),
                     p_prev_tree,
@@ -1187,7 +937,7 @@ class Multiphase(BGKSim):
                 print(f"Saving data at timestep {timestep}/{t_max}")
                 rho_tree, _ = self.update_macroscopic(f_tree)
                 u_tree = self.macroscopic_velocity(f_tree, rho_tree)
-                p_tree = self.EOS(rho_tree)
+                p_tree = self.eos.EOS(rho_tree)
                 p_tree = map(
                     lambda p: downsample_field(p, self.downsamplingFactor), p_tree
                 )
@@ -1356,274 +1106,131 @@ class Multiphase(BGKSim):
         self.output_data(**kwargs)
 
 
-class VanderWaal(Multiphase):
-    """
-    Define multiphase model using the VanderWaals EOS.
-
-    Parameters
-    ----------
-
-    Reference
-    ---------
-    1. Reprint of: The Equation of State for Gases and Liquids. The Journal of Supercritical Fluids,
-    100th year Anniversary of van der Waals' Nobel Lecture, 55, no. 2 (2010): 403–14. https://doi.org/10.1016/j.supflu.2010.11.001.
-
-    Notes
-    -----
-    EOS is given by:
-        p = (rho*R*T)/(1 - b*rho) - a*rho^2
-    """
-
+class MultiphaseBGK(Multiphase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.a = kwargs.get("a")
-        self.b = kwargs.get("b")
-
-    def set_temperature(self, T):
-        self.T = T
-
-    @partial(jit, static_argnums=(0,))
-    def EOS(self, rho_tree):
-        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - a * rho**2
-        return map(eos, self.a, self.b, self.R, rho_tree)
-
-
-# class ShanChen(Multiphase):
-#     """
-#     Define the multiphase model using the original Shan-Chen EOS. For this class compute_psi is redefined.
-#     For this case, there is no need to define R and T as they are not used in the EOS.
-#
-#     Parameters
-#     ----------
-#     rho_0: float
-#         rho_0 used for computing the effective mass (psi)
-#
-#     Reference
-#     ---------
-#     1. Shan, Xiaowen, and Hudong Chen. “Lattice Boltzmann Model for Simulating Flows with Multiple Phases and Components.”
-#        Physical Review E 47, no. 3 (March 1, 1993): 1815-19. https://doi.org/10.1103/PhysRevE.47.1815.
-#
-#     Notes
-#     -----
-#     The expression for psi in this case is:
-#     psi = rho_0 * (1 - exp(-rho / rho_0))
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self.rho_0 = kwargs.get("rho_0")
-#
-#     @property
-#     def rho_0(self):
-#         return self._rho_0
-#
-#     @rho_0.setter
-#     def rho_0(self, value):
-#         if value is None:
-#             raise ValueError("rho_0 value must be provided Shan-Chen EOS")
-#         self._rho_0 = value
-#
-#     @partial(jit, static_argnums=(0,))
-#     def compute_psi(self, rho_tree):
-#         return map(
-#             lambda rho: self.rho_0 * (1.0 - jnp.exp(-rho / self.rho_0)), rho_tree
-#         )
-
-
-class Redlich_Kwong(Multiphase):
-    """
-    Define multiphase model using the Redlich-Kwong EOS.
-
-    Parameters
-    ----------
-
-    Reference
-    ---------
-    1. Redlich O., Kwong JN., "On the thermodynamics of solutions; an equation of state; fugacities of gaseous solutions."
-    Chem Rev. 1949 Feb;44(1):233-44. https://doi.org/10.1021/cr60137a013.
-
-    Notes
-    -----
-    EOS is given by:
-        p = (rho*R*T)/(1 - b*rho) - (a*rho^2)/(sqrt(T) * (1 + b*rho))
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def set_temperature(self, T):
-        self.T = T
-
-    @partial(jit, static_argnums=(0,))
-    def EOS(self, rho_tree):
-        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
-            a * rho**2
-        ) / (np.sqrt(self.T) * (1.0 + b * rho))
-        return map(eos, self.a, self.b, self.R, rho_tree)
-
-
-class Redlich_Kwong_Soave(Multiphase):
-    """
-    Define multiphase model using the Redlich-Kwong-Soave EOS.
-
-    Parameters
-    ----------
-
-    Reference
-    ---------
-    1. Giorgio Soave, "Equilibrium constants from a modified Redlich-Kwong equation of state",
-    Chemical Engineering Science 27, no. 6(1972), 1197-1203, https://doi.org/10.1016/0009-2509(72)80096-4.
-
-    Notes
-    -----
-    EOS is given by:
-        p = (rho*R*T)/(1 - b*rho) - (a*alpha*rho^2)/(1 + b*rho)
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.rks_omega = kwargs.get("RKS_omega")
-        self.set_alpha()
 
     @property
-    def rks_omega(self):
-        return self._rks_omega
+    def omega(self):
+        return self._omega
 
-    @rks_omega.setter
-    def rks_omega(self, value):
-        if value is None:
-            raise ValueError(
-                "rks_omega value must be provided for using Redlich-Kwong EOS"
-            )
-        self._rks_omega = value
+    @omega.setter
+    def omega(self, value):
+        if not isinstance(value, list):
+            raise ValueError("omega must be a list")
+        self._omega = value
 
-    def set_alpha(self):
-        Tc_tree = map(
-            lambda a, b, R: (a / b) * (0.08664 / 0.42784) * (1 / R),
-            self.a,
-            self.b,
-            self.R,
-        )
-        self.alpha = map(
-            lambda rks_omega, Tc: (
-                1
-                + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2)
-                * (1 - np.sqrt(self.T / Tc))
-            )
-            ** 2,
-            self.rks_omega,
-            Tc_tree,
+    @partial(jit, static_argnums=(0,), donate_argnums=(1,))
+    def collision(self, fin_tree):
+        """
+        BGK collision step for lattice, extended to pytrees.
+
+        The collision step is where the main physics of the LBM is applied. In the BGK approximation,
+        the distribution function is relaxed towards the equilibrium distribution function.
+        """
+        fin_tree = map(lambda fin: self.precisionPolicy.cast_to_compute(fin), fin_tree)
+        rho_tree, u_tree = self.update_macroscopic(fin_tree)
+        feq_tree = self.equilibrium(rho_tree, u_tree, cast_output=False)
+        fneq_tree = map(lambda feq, fin: feq - fin, feq_tree, fin_tree)
+        fout_tree = map(
+            lambda fin, fneq, omega: fin + omega * fneq, fin_tree, fneq_tree, self.omega
         )
 
-    def set_temperature(self, T):
-        self.T = T
-        self.set_alpha()
+        fout_tree = self.apply_force(fout_tree, feq_tree, rho_tree, u_tree)
 
-    @partial(jit, static_argnums=(0,))
-    def EOS(self, rho_tree):
-        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
-            a * alpha * rho**2
-        ) / (1.0 + b * rho)
-        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
+        return map(lambda fout: self.precisionPolicy.cast_to_output(fout), fout_tree)
 
 
-class Peng_Robinson(Multiphase):
-    """
-    Define multiphase model using the Peng-Robinson EOS.
-
-    Parameters
-    ----------
-
-    Reference
-    ---------
-    1. Peng, Ding-Yu, and Donald B. Robinson. "A new two-constant equation of state."
-    Industrial & Engineering Chemistry Fundamentals 15, no. 1 (1976): 59-64. https://doi.org/10.1021/i160057a011
-
-    Notes
-    -----
-    EOS is given by:
-        p = (rho*R*T)/(1 - b*rho) - (a*alpha*rho^2)/(1 + 2*b*rho - (b*rho)**2)
-    """
-
+class MultiphaseMRT(Multiphase):
     def __init__(self, **kwargs):
+        kwargs.update({"omega": [1.0]})
         super().__init__(**kwargs)
-        self.pr_omega = kwargs.get("pr_omega")
+        self.M_inv = map(
+            lambda M: jnp.array(
+                np.transpose(np.linalg.inv(M)),
+                dtype=self.precisionPolicy.compute_dtype,
+            ),
+            kwargs.get("M"),
+        )
+        self.M = map(
+            lambda M: jnp.array(
+                np.transpose(M), dtype=self.precisionPolicy.compute_dtype
+            ),
+            kwargs.get("M"),
+        )
+        self.S = map(
+            lambda S: jnp.array(S, dtype=self.precisionPolicy.compute_dtype),
+            kwargs.get("S"),
+        )
 
     @property
-    def pr_omega(self):
-        return self._pr_omega
+    def M(self):
+        return self._M
 
-    @pr_omega.setter
-    def pr_omega(self, value):
-        if value is None:
+    @M.setter
+    def M(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Matrix M must be a list")
+        if len(value) != self.n_components:
             raise ValueError(
-                "pr_omega value must be provided for using Peng-Robinson EOS"
+                "Number of components does not match number of matrix M passed"
             )
-        self._pr_omega = value
+        else:
+            self._M = value
 
-    def set_alpha(self):
-        Tc_tree = map(
-            lambda a, b, R: (a / b) * (0.0778 / 0.45724) * (1 / R),
-            self.a,
-            self.b,
-            self.R,
-        )
-        self.alpha = map(
-            lambda pr_omega, Tc: (
-                1
-                + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2)
-                * (1 - np.sqrt(self.T / Tc))
+    @property
+    def S(self):
+        return self._S
+
+    @S.setter
+    def S(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Matrix S must be a list")
+        if len(value) != self.n_components:
+            raise ValueError(
+                "Number of components does not match number of matrix S passed"
             )
-            ** 2,
-            self.pr_omega,
-            Tc_tree,
+        else:
+            self._S = value
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def apply_force(self, f_postcollision_tree, m_tree, meq_tree, rho_tree, u_tree):
+        F_tree = self.compute_force(f_postcollision_tree)
+        if self.force is not None:
+            delta_u_tree = map(lambda F: (F + self.force), F_tree)
+
+        delta_u_tree = map(lambda F, rho: F / rho, F_tree, rho_tree)
+        u_temp_tree = map(lambda u, delta_u: u + delta_u, u_tree, delta_u_tree)
+        feq_force_tree = self.equilibrium(rho_tree, u_temp_tree)
+        meq_force_tree = map(
+            lambda feq_force, M: jnp.dot(feq_force, M), feq_force_tree, self.M
+        )
+        return map(
+            lambda m, meq_force, meq: m + meq_force - meq,
+            m_tree,
+            meq_force_tree,
+            meq_tree,
         )
 
-    def set_temperature(self, T):
-        self.T = T
-        self.set_alpha()
-
-    @partial(jit, static_argnums=(0,))
-    def EOS(self, rho_tree):
-        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
-            a * alpha * rho**2
-        ) / (1.0 + 2 * b * rho - b**2 * rho**2)
-        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
-
-
-class Carnahan_Starling(Multiphase):
-    """
-    Define multiphase model using the Carnahan-Starling EOS.
-
-    Parameters
-    ----------
-
-    Reference
-    ---------
-    1.  Carnahan, Norman F., and Kenneth E. Starling. "Equation of state for nonattracting rigid spheres."
-    The Journal of chemical physics 51, no. 2 (1969): 635-636. https://doi.org/10.1063/1.1672048
-
-    Notes
-    -----
-    EOS is given by:
-        p = (rho*R*T)/(1 - b*rho) - (a*alpha*rho^2)/(1 + 2*b*rho - (b*rho)**2)
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def set_temperature(self, T):
-        self.T = T
-
-    @partial(jit, static_argnums=(0,))
-    def EOS(self, rho_tree):
-        rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
-        eos = lambda a, R, rho, x: (
-            rho * R * self.T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)
-        ) - (a * rho**2)
-        return map(eos, self.a, self.R, rho_tree, x_tree)
+    @partial(jit, static_argnums=(0,), donate_argnums=(1,))
+    def collision(self, fin_tree):
+        """
+        MRT collision step for lattice.
+        """
+        fin_tree = map(lambda f: self.precisionPolicy.cast_to_compute(f), fin_tree)
+        m_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
+        rho_tree, u_tree = self.update_macroscopic(fin_tree)
+        feq_tree = self.equilibrium(rho_tree, u_tree)
+        meq_tree = map(lambda feq, M: jnp.dot(feq, M), feq_tree, self.M)
+        mout_tree = map(
+            lambda m, meq, S: -jnp.dot(m - meq, S), m_tree, meq_tree, self.S
+        )
+        mout_tree = self.apply_force(fin_tree, mout_tree, meq_tree, rho_tree, u_tree)
+        return map(
+            lambda fin, mout, M_inv: self.precisionPolicy.cast_to_output(
+                fin + jnp.dot(mout, M_inv)
+            ),
+            fin_tree,
+            mout_tree,
+            self.M_inv,
+        )
