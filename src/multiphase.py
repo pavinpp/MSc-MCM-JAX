@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as orb
-from jax import jit
+from jax import jit, vmap
 from jax.experimental.multihost_utils import process_allgather
 
 # Third-party libraries
@@ -75,6 +75,16 @@ class Multiphase(LBMBase):
 
         self.solid_mask_streamed = self.get_solid_mask_streamed()
         self.force = self.get_force()
+
+    @property
+    def omega(self):
+        return self._omega
+
+    @omega.setter
+    def omega(self, value):
+        if not isinstance(value, list):
+            raise ValueError("omega must be a list")
+        self._omega = value
 
     @property
     def n_components(self):
@@ -179,13 +189,14 @@ class Multiphase(LBMBase):
         numpy.ndarray: solid_mask array. Dimension: (nx, ny, 1) for d == 2 and (nx, ny, nz, 1) for d == 3
         """
         solid_indices = []
-        for bc in self.wall_BCs:
-            if (
-                isinstance(bc, BounceBack)
-                or isinstance(bc, BounceBackHalfway)
-                or isinstance(bc, BounceBackMoving)
-            ):
-                solid_indices.append(np.array(bc.indices).T)
+        for i in range(self.n_components):
+            for bc in self.BCs[i]:
+                if (
+                    isinstance(bc, BounceBack)
+                    or isinstance(bc, BounceBackHalfway)
+                    or isinstance(bc, BounceBackMoving)
+                ):
+                    solid_indices.append(np.array(bc.indices).T)
         solid_index = None
         if not len(solid_indices) == 0:
             solid_index = np.vstack(solid_indices)
@@ -216,18 +227,14 @@ class Multiphase(LBMBase):
         Create boundary data for the Lattice Boltzmann simulation by setting boundary conditions,
         creating grid mask, and preparing local masks and normal arrays.
         """
-        self.wall_BCs = []
         self.BCs = [[] for _ in range(self.n_components)]
         self.set_boundary_conditions()
         # Accumulate the indices of all BCs to create the grid mask with FALSE along directions that
         # stream into a boundary voxel.
         for i in range(self.n_components):
-            print(f"Component: {i+1}")
+            print(f"Component: {i + 1}")
             solid_halo_list = [
-                np.array(bc.indices).T
-                for BCs in [self.BCs[i], self.wall_BCs]
-                for bc in BCs
-                if bc.isSolid
+                np.array(bc.indices).T for bc in self.BCs[i] if bc.isSolid
             ]
             solid_halo_voxels = (
                 np.unique(np.vstack(solid_halo_list), axis=0)
@@ -384,31 +391,6 @@ class Multiphase(LBMBase):
             G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         return jnp.array(G_fs, dtype=self.precisionPolicy.compute_dtype)
 
-    def initialize_macroscopic_fields(self):
-        """
-        Functions to initialize the pytrees of density and velocity arrays with their corresponding initial values.
-        By default, velocities is set as 0 everywhere and density as 1.0.
-
-        Note:
-            Function must be overwritten in a subclass or instance of the class to not use the default values.
-
-        Parameters
-        ----------
-        None by default, can be overwritten as required
-
-        Returns
-        -------
-        None, None: The default density and velocity values, both None.
-        This indicates that the actual values should be set elsewhere.
-        """
-        print(
-            "Default initial conditions assumed for the missing entries in the dictionary: density = 1.0 and velocity = 0.0"
-        )
-        print(
-            "To set explicit initial values for velocity and density, use the self.initialize_macroscopic_fields function"
-        )
-        return None, None
-
     def assign_fields_sharded(self):
         """
         This function is used to initialize pytree of the distribution arrays using the initial velocities and velocity defined in self.initialize_macroscopic_fields function.
@@ -427,20 +409,19 @@ class Multiphase(LBMBase):
         f: pytree of distributed JAX array of shape: (self.nx, self.ny, self.q) for 2D and (self.nx, self.ny, self.nz, self.q) for 3D.
         """
         rho0_tree, u0_tree = self.initialize_macroscopic_fields()
-        shape = (
-            (self.nx, self.ny, self.q)
-            if self.dim == 2
-            else (self.nx, self.ny, self.nz, self.q)
-        )
+        if self.dim == 2:
+            shape = (self.nx, self.ny, self.q)
+        if self.dim == 3:
+            shape = (self.nx, self.ny, self.nz, self.q)
         f_tree = []
         if rho0_tree is not None and u0_tree is not None:
-            assert (
-                len(rho0_tree) == self.n_components
-            ), "The initial density values for all components must be provided"
+            assert len(rho0_tree) == self.n_components, (
+                "The initial density values for all components must be provided"
+            )
 
-            assert (
-                len(u0_tree) == self.n_components
-            ), "The initial velocity values for all components must be provided."
+            assert len(u0_tree) == self.n_components, (
+                "The initial velocity values for all components must be provided."
+            )
 
             for i in range(self.n_components):
                 rho0, u0 = rho0_tree[i], u0_tree[i]
@@ -563,21 +544,17 @@ class Multiphase(LBMBase):
         """
         rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
         p_tree = self.eos.EOS(rho_tree)
-        G_diag = self.g_kkprime.diagonal()
         # Shan-Chen potential using modified pressure
-        phi_tree = map(
-            lambda k, p, rho, G: 2 * (k * p - self.lattice.cs2 * rho) / G,
+        psi_tree = map(
+            lambda k, p, rho, G: jnp.sqrt(2 * (k * p - self.lattice.cs2 * rho) / G),
             self.k,
             p_tree,
             rho_tree,
-            list(G_diag),
+            self.g_kkprime.diagonal().tolist(),
         )
-        psi_tree = map(
-            lambda phi: jnp.sqrt(phi), phi_tree
-        )  # Exact value of g does not matter
         # Zhang-Chen potential
         U_tree = map(
-            lambda k, p, rho: -(k * p - self.lattice.cs2 * rho),
+            lambda k, p, rho: k * p - self.lattice.cs2 * rho,
             self.k,
             p_tree,
             rho_tree,
@@ -653,12 +630,11 @@ class Multiphase(LBMBase):
             return reduce(
                 operator.add,
                 map(
-                    lambda G, psi, psi_s: jnp.dot(
-                        G * self.G_ff * (1 - self.solid_mask_streamed) * (psi_s - psi),
+                    lambda G, psi_s: jnp.dot(
+                        G * self.G_ff * (1 - self.solid_mask_streamed) * psi_s,
                         self.c.T,
                     ),
                     list(g_kkprime),
-                    psi_tree,
                     psi_s_tree,
                 ),
             )
@@ -671,19 +647,18 @@ class Multiphase(LBMBase):
             fluid nodes are considered.
             """
             return map(
-                lambda U, U_s: jnp.dot(
-                    self.G_ff * (1 - self.solid_mask_streamed) * (U_s - U),
+                lambda U_s: jnp.dot(
+                    self.G_ff * (1 - self.solid_mask_streamed) * U_s,
                     self.c.T,
                 ),
-                U_tree,
                 U_s_tree,
             )
 
         return map(
-            lambda A, psi, nt_1, nt_2: (1 - A) * psi * nt_1 - A * nt_2,
+            lambda A, psi, nt_1, nt_2: (1 - A) * psi * nt_1 + A * nt_2,
             self.A,
             psi_tree,
-            list(jax.vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
+            list(vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
             ffk_2(),
         )
 
@@ -702,17 +677,17 @@ class Multiphase(LBMBase):
         Pytree of jax.numpy.ndarray
             Pytree of fluid-solid interaction force.
         """
-        # return map(
-        #     lambda g_ks, rho: -g_ks * rho * jnp.dot(self.solid_mask_streamed, self.c.T),
-        #     self.g_ks,
-        #     rho_tree,
-        # )
-        psi_tree, _ = self.compute_potential(rho_tree)
         return map(
-            lambda g_ks, psi: -g_ks * psi * jnp.dot(self.solid_mask_streamed, self.c.T),
+            lambda g_ks, rho: -g_ks * rho * jnp.dot(self.solid_mask_streamed, self.c.T),
             self.g_ks,
-            psi_tree,
+            rho_tree,
         )
+        # psi_tree, _ = self.compute_potential(rho_tree)
+        # return map(
+        #     lambda g_ks, psi: -g_ks * psi * jnp.dot(self.solid_mask_streamed, self.c.T),
+        #     self.g_ks,
+        #     psi_tree,
+        # )
 
     @partial(jit, static_argnums=(0,), inline=True)
     def apply_force(self, f_postcollision_tree, feq_tree, rho_tree, u_tree):
@@ -736,11 +711,8 @@ class Multiphase(LBMBase):
             The post-collision distribution functions with the force applied.
         """
         F_tree = self.compute_force(rho_tree)
-        # if self.force is not None:
-        #     delta_u_tree = map(lambda F, rho: (F + self.force * rho), F_tree, rho_tree)
 
-        delta_u_tree = map(lambda F, rho: F / rho, F_tree, rho_tree)
-        u_temp_tree = map(lambda u, delta_u: u + delta_u, u_tree, delta_u_tree)
+        u_temp_tree = map(lambda u, F, rho: u + F / rho, u_tree, F_tree, rho_tree)
         feq_force_tree = self.equilibrium(rho_tree, u_temp_tree)
         return map(
             lambda f_postcollision, feq_force, feq: f_postcollision + feq_force - feq,
@@ -779,10 +751,8 @@ class Multiphase(LBMBase):
             return fout
 
         for i in range(self.n_components):
-            BCs = [self.BCs[i], self.wall_BCs]
-            for BC in BCs:
-                for bc in BC:
-                    fout_tree[i] = _apply_bc_(fin_tree[i], fout_tree[i], bc)
+            for bc in self.BCs[i]:
+                fout_tree[i] = _apply_bc_(fin_tree[i], fout_tree[i], bc)
 
         return fout_tree
 
@@ -1018,7 +988,7 @@ class Multiphase(LBMBase):
                 print(
                     colored("MLUPS: ", "blue")
                     + colored(
-                        f"{self.nx * self.ny * t_max / (end - start) / 1e6}",
+                        f"{self.n_components * self.nx * self.ny * t_max / (end - start) / 1e6}",
                         "red",
                     )
                 )
@@ -1035,7 +1005,7 @@ class Multiphase(LBMBase):
                 print(
                     colored("MLUPS: ", "blue")
                     + colored(
-                        f"{self.nx * self.ny * self.nz * t_max / (end - start) / 1e6}",
+                        f"{self.n_components * self.nx * self.ny * self.nz * t_max / (end - start) / 1e6}",
                         "red",
                     )
                 )
@@ -1117,16 +1087,6 @@ class MultiphaseBGK(Multiphase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    @property
-    def omega(self):
-        return self._omega
-
-    @omega.setter
-    def omega(self, value):
-        if not isinstance(value, list):
-            raise ValueError("omega must be a list")
-        self._omega = value
-
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
     def collision(self, fin_tree):
         """
@@ -1152,11 +1112,12 @@ class MultiphaseMRT(Multiphase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.kappa = kwargs.get("kappa")
-        self.tau_rho = kwargs.get("tau_rho", [1.0 for _ in range(self.n_components)])
-        self.tau_e = kwargs.get("tau_e", [1.0 for _ in range(self.n_components)])
-        self.tau_eta = kwargs.get("tau_eta", [1.0 for _ in range(self.n_components)])
-        self.tau_j = kwargs.get("tau_j", [1.0 for _ in range(self.n_components)])
-        self.tau_q = kwargs.get("tau_q", [1.0 for _ in range(self.n_components)])
+        self.s_rho = kwargs.get("s_rho")
+        self.s_e = kwargs.get("s_e")
+        self.s_eta = kwargs.get("s_eta")
+        self.s_j = kwargs.get("s_j")
+        self.s_q = kwargs.get("s_q")
+        self.s_v = kwargs.get("s_v")
         self.M_inv = map(
             lambda M: jnp.array(
                 np.linalg.inv(M).T,
@@ -1168,30 +1129,58 @@ class MultiphaseMRT(Multiphase):
             lambda M: jnp.array(M.T, dtype=self.precisionPolicy.compute_dtype),
             kwargs.get("M"),
         )
-        self.S = map(
-            lambda tau_rho, tau_e, tau_eta, tau_j, tau_q, omega: jnp.array(
-                np.diag(
-                    [
-                        1 / tau_rho,
-                        1 / tau_e,
-                        1 / tau_eta,
-                        1 / tau_j,
-                        1 / tau_q,
-                        1 / tau_j,
-                        1 / tau_q,
-                        omega,
-                        omega,
-                    ]
+        if isinstance(self.lattice, LatticeD2Q9):
+            self.S = map(
+                lambda s_rho, s_e, s_eta, s_j, s_q, s_v: jnp.array(
+                    np.diag([s_rho, s_e, s_eta, s_j, s_q, s_j, s_q, s_v, s_v]),
+                    dtype=self.precisionPolicy.compute_dtype,
                 ),
-                dtype=self.precisionPolicy.compute_dtype,
-            ),
-            self.tau_rho,
-            self.tau_e,
-            self.tau_eta,
-            self.tau_j,
-            self.tau_q,
-            self.omega,
-        )
+                self.s_rho,
+                self.s_e,
+                self.s_eta,
+                self.s_j,
+                self.s_q,
+                self.s_v,
+            )
+        elif isinstance(self.lattice, LatticeD3Q19):
+            self.s_pi = kwargs.get("s_pi")
+            self.s_m = kwargs.get("s_m")
+            self.S = map(
+                lambda s_rho, s_e, s_eta, s_j, s_q, s_v, s_pi, s_m: jnp.array(
+                    np.diag(
+                        [
+                            s_rho,
+                            s_e,
+                            s_eta,
+                            s_j,
+                            s_q,
+                            s_j,
+                            s_q,
+                            s_j,
+                            s_q,
+                            s_v,
+                            s_pi,
+                            s_v,
+                            s_pi,
+                            s_v,
+                            s_v,
+                            s_v,
+                            s_m,
+                            s_m,
+                            s_m,
+                        ]
+                    ),
+                    dtype=self.precisionPolicy.compute_dtype,
+                ),
+                self.s_rho,
+                self.s_e,
+                self.s_eta,
+                self.s_j,
+                self.s_q,
+                self.s_v,
+                self.s_pi,
+                self.s_m,
+            )
 
     @property
     def M(self):
@@ -1209,197 +1198,138 @@ class MultiphaseMRT(Multiphase):
             self._M = value
 
     @partial(jit, static_argnums=(0,))
-    def adjust_surface_tension(self, rho_tree):
-        psi_tree, _ = self.compute_potential(rho_tree)
+    def adjust_surface_tension(self, psi_tree):
         psi_s_tree = map(
             lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
             psi_tree,
         )
         c = jnp.transpose(self.c)
         if isinstance(self.lattice, LatticeD2Q9):
-            Q_xx_tree = map(
-                lambda kappa, A, psi, psi_s: kappa
-                * (
-                    (1 - A)
-                    * psi[..., 0]
-                    * jnp.dot(self.G_ff * (psi_s - psi), c[:, 0] ** 2)
-                    + 0.5 * A * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 0] ** 2)
-                ),
-                self.kappa,
-                self.A,
-                psi_tree,
-                psi_s_tree,
+            tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(
+                self.G_ff * (psi_s - psi), c[:, i] * c[:, j]
             )
-            Q_xy_tree = map(
-                lambda kappa, A, psi, psi_s: kappa
-                * (
-                    (1 - A)
-                    * psi[..., 0]
-                    * jnp.dot(self.G_ff * (psi_s - psi), c[:, 0] * c[:, 1])
-                    + 0.5
-                    * A
-                    * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 0] * c[:, 1])
-                ),
-                self.kappa,
-                self.A,
-                psi_tree,
-                psi_s_tree,
-            )
-            Q_yy_tree = map(
-                lambda kappa, A, psi, psi_s: kappa
-                * (
-                    (1 - A)
-                    * psi[..., 0]
-                    * jnp.dot(self.G_ff * (psi_s - psi), c[:, 1] ** 2)
-                    + 0.5 * A * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 1] ** 2)
-                ),
-                self.kappa,
-                self.A,
-                psi_tree,
-                psi_s_tree,
+            tm2 = lambda i, j, psi, psi_s: jnp.dot(
+                self.G_ff * (psi_s**2 - psi**2), c[:, i] * c[:, j]
             )
 
-            C_tree = map(
-                lambda _: jnp.zeros(
-                    (self.nx, self.ny, self.q),
+            def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
+                C = jnp.zeros(
+                    (self.nx, self.ny, self.lattice.q),
                     dtype=self.precisionPolicy.compute_dtype,
-                ),
-                rho_tree,
-            )
-
-            def compute_C(C, tau_e, tau_eta, omega, Q_xx, Q_yy, Q_xy):
-                C = C.at[..., 1].set((1.5 / tau_e) * (Q_xx + Q_yy))
-                # C = C.at[..., 2].set(-(1.5 / tau_eta) * (Q_xx + Q_yy))
-                C = C.at[..., 7].set(-1.5 * omega * (Q_xx - Q_yy))
-                C = C.at[..., 8].set(-omega * Q_xy)
+                )
+                qxx = -kappa * (
+                    (1 - A) * tm1(0, 0, psi, psi_s) + 0.5 * A * tm2(0, 0, psi, psi_s)
+                )
+                qxy = -kappa * (
+                    (1 - A) * tm1(0, 1, psi, psi_s) + 0.5 * A * tm2(0, 1, psi, psi_s)
+                )
+                qyy = -kappa * (
+                    (1 - A) * tm1(1, 1, psi, psi_s) + 0.5 * A * tm2(1, 1, psi, psi_s)
+                )
+                C = C.at[..., 1].set(1.5 * s_e * (qxx + qyy))
+                C = C.at[..., 2].set(-1.5 * s_eta * (qxx + qyy))
+                C = C.at[..., 7].set(-s_v * (qxx - qyy))
+                C = C.at[..., 8].set(-s_v * qxy)
                 return C
 
-            return map(
-                lambda C, tau_e, tau_eta, omega, Q_xx, Q_yy, Q_xy: compute_C(
-                    C, tau_e, tau_eta, omega, Q_xx, Q_yy, Q_xy
+            C_tree = map(
+                lambda kappa, A, s_v, s_e, s_eta, psi, psi_s: compute_C(
+                    kappa, A, s_v, s_e, s_eta, psi, psi_s
                 ),
-                C_tree,
-                self.tau_e,
-                self.tau_eta,
-                self.omega,
-                Q_xx_tree,
-                Q_yy_tree,
-                Q_xy_tree,
+                self.kappa,
+                self.A,
+                self.s_v,
+                self.s_e,
+                self.s_eta,
+                psi_tree,
+                psi_s_tree,
+            )
+            return C_tree
+        elif isinstance(self.lattice, LatticeD3Q19):
+            tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(
+                self.G_ff * (psi_s - psi), c[:, i] * c[:, j]
+            )
+            tm2 = lambda i, j, psi, psi_s: jnp.dot(
+                self.G_ff * (psi_s**2 - psi**2), c[:, i] * c[:, j]
             )
 
-            # elif isinstance(self.lattice, LatticeD3Q19):
-            #     Q_xx_tree = map(
-            #         lambda kappa, A, psi, psi_s: kappa
-            #         * (
-            #             (1 - A) * psi * jnp.dot(self.G_ff * (psi_s - psi), c[:, 0] ** 2)
-            #             + 0.5 * A * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 0] ** 2)
-            #         ),
-            #         self.kappa,
-            #         self.A,
-            #         psi_tree,
-            #         psi_s_tree,
-            #     )
-            #     Q_xy_tree = map(
-            #         lambda kappa, A, psi, psi_s: kappa
-            #         * (
-            #             (1 - A)
-            #             * psi[..., 0]
-            #             * jnp.dot(self.G_ff * (psi_s - psi), c[:, 0] * c[:, 1])
-            #             + 0.5
-            #             * A
-            #             * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 0] * c[:, 1])
-            #         ),
-            #         self.kappa,
-            #         self.A,
-            #         psi_tree,
-            #         psi_s_tree,
-            #     )
-            #     Q_xz_tree = map(
-            #         lambda kappa, A, psi, psi_s: kappa
-            #         * (
-            #             (1 - A)
-            #             * psi
-            #             * jnp.dot(self.G_ff * (psi_s - psi), c[:, 0] * c[:, 2])
-            #             + 0.5
-            #             * A
-            #             * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 0] * c[:, 2])
-            #         ),
-            #         self.kappa,
-            #         self.A,
-            #         psi_tree,
-            #         psi_s_tree,
-            #     )
-            #     Q_yy_tree = map(
-            #         lambda kappa, A, psi, psi_s: kappa
-            #         * (
-            #             (1 - A)
-            #             * psi[..., 0]
-            #             * jnp.dot(self.G_ff * (psi_s - psi), c[:, 1] * c[:, 1])
-            #             + 0.5
-            #             * A
-            #             * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 1] * c[:, 1])
-            #         ),
-            #         self.kappa,
-            #         self.A,
-            #         psi_tree,
-            #         psi_s_tree,
-            #     )
-            #     Q_yz_tree = map(
-            #         lambda kappa, A, psi, psi_s: kappa
-            #         * (
-            #             (1 - A)
-            #             * psi[..., 0]
-            #             * jnp.dot(self.G_ff * (psi_s - psi), c[:, 1] * c[:, 2])
-            #             + 0.5
-            #             * A
-            #             * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 1] * c[:, 2])
-            #         ),
-            #         self.kappa,
-            #         self.A,
-            #         psi_tree,
-            #         psi_s_tree,
-            #     )
-            #     Q_zz_tree = map(
-            #         lambda kappa, A, psi, psi_s: kappa
-            #         * (
-            #             (1 - A)
-            #             * psi[..., 0]
-            #             * jnp.dot(self.G_ff * (psi_s - psi), c[:, 2] * c[:, 2])
-            #             + 0.5
-            #             * A
-            #             * jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, 2] * c[:, 2])
-            #         ),
-            #         self.kappa,
-            #         self.A,
-            #         psi_tree,
-            #         psi_s_tree,
-            #     )
-            # return Q_xx_tree, Q_xy_tree, Q_xz_tree, Q_yy_tree, Q_yz_tree, Q_zz_tree
-            # raise NotImplementedError("3D surface tension adjustment not implemented")
+            def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
+                C = jnp.zeros(
+                    (self.nx, self.ny, self.nz, self.lattice.q),
+                    dtype=self.precisionPolicy.compute_dtype,
+                )
+                qxx = -kappa * (
+                    (1 - A) * tm1(0, 0, psi, psi_s) + 0.5 * A * tm2(0, 0, psi, psi_s)
+                )
+                qxy = -kappa * (
+                    (1 - A) * tm1(0, 1, psi, psi_s) + 0.5 * A * tm2(0, 1, psi, psi_s)
+                )
+                qxz = -kappa * (
+                    (1 - A) * tm1(0, 2, psi, psi_s) + 0.5 * A * tm2(0, 2, psi, psi_s)
+                )
+                qyy = -kappa * (
+                    (1 - A) * tm1(1, 1, psi, psi_s) + 0.5 * A * tm2(1, 1, psi, psi_s)
+                )
+                qyz = -kappa * (
+                    (1 - A) * tm1(1, 2, psi, psi_s) + 0.5 * A * tm2(1, 2, psi, psi_s)
+                )
+                qzz = -kappa * (
+                    (1 - A) * tm1(2, 2, psi, psi_s) + 0.5 * A * tm2(2, 2, psi, psi_s)
+                )
+                C = C.at[..., 1].set((2 / 5) * s_e * (qxx + qyy + qzz))
+                C = C.at[..., 9].set(-s_v * (2 * qxx - qyy - qzz))
+                C = C.at[..., 11].set(-s_v * (qyy - qzz))
+                C = C.at[..., 13].set(-s_v * qxy)
+                C = C.at[..., 14].set(-s_v * qyz)
+                C = C.at[..., 15].set(-s_v * qxz)
+                return C
+
+            C_tree = map(
+                lambda kappa, A, s_v, s_e, s_eta, psi, psi_s: compute_C(
+                    kappa, A, s_v, s_e, s_eta, psi, psi_s
+                ),
+                self.kappa,
+                self.A,
+                self.s_v,
+                self.s_e,
+                self.s_eta,
+                psi_tree,
+                psi_s_tree,
+            )
+            return C_tree
 
     @partial(jit, static_argnums=(0,), inline=True)
     def apply_force(self, m_tree, meq_tree, rho_tree, u_tree):
-        # F_tree = self.compute_force(
-        #     map(
-        #         lambda m, Minv: jnp.sum(jnp.dot(m, Minv), axis=-1, keepdims=True),
-        #         m_tree,
-        #         self.M_inv,
-        #     )
-        # )
+        """
+        Modified version of the apply_force defined in LBMBase to account for modified force.
+
+        Parameters
+        ----------
+        m_tree: pytree of jax.numpy.ndarray
+            pytree of post-collision distribution functions.
+        meq_tree: pytree of jax.numpy.ndarray
+            pytree of equilibrium distribution functions.
+        rho_tree: pytree of jax.numpy.ndarray
+            pytree of density field for all components.
+        u_tree: pytree of jax.numpy.ndarray
+            pytree of velocity field for all components.
+
+        Returns
+        -------
+        f_postcollision: jax.numpy.ndarray
+            The post-collision distribution functions with the force applied.
+        """
         F_tree = self.compute_force(rho_tree)
-        u_temp_tree = map(lambda u, F, rho: u + F / rho, u_tree, F_tree, rho_tree)
+
+        delta_u_tree = map(lambda F, rho: F / rho, F_tree, rho_tree)
+        u_temp_tree = map(lambda u, delta_u: u + delta_u, u_tree, delta_u_tree)
         feq_force_tree = self.equilibrium(rho_tree, u_temp_tree)
-        meq_force_tree = map(
-            lambda feq_force, M: jnp.dot(feq_force, M), feq_force_tree, self.M
-        )
-        C_tree = self.adjust_surface_tension(rho_tree)
+        meq_force_tree = map(lambda feq, M: jnp.dot(feq, M), feq_force_tree, self.M)
         return map(
-            lambda C, m, meq_force, meq, Minv: jnp.dot(m + meq_force - meq, Minv),
-            C_tree,
+            lambda m, meq_force, meq: m + meq_force - meq,
             m_tree,
             meq_force_tree,
             meq_tree,
-            self.M_inv,
         )
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
@@ -1408,14 +1338,23 @@ class MultiphaseMRT(Multiphase):
         MRT collision step for lattice.
         """
         fin_tree = map(lambda f: self.precisionPolicy.cast_to_compute(f), fin_tree)
-        m_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
         rho_tree, u_tree = self.update_macroscopic(fin_tree)
+        m_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
         feq_tree = self.equilibrium(rho_tree, u_tree)
         meq_tree = map(lambda feq, M: jnp.dot(feq, M), feq_tree, self.M)
+        psi_tree, _ = self.compute_potential(rho_tree)
+        C_tree = self.adjust_surface_tension(psi_tree)
         mout_tree = map(
-            lambda m, meq, S: m + jnp.dot(meq - m, S), m_tree, meq_tree, self.S
+            lambda m, meq, S: m - jnp.dot(m - meq, S),
+            m_tree,
+            meq_tree,
+            self.S,
         )
-        fout_tree = self.apply_force(mout_tree, meq_tree, rho_tree, u_tree)
+        mout_tree = self.apply_force(mout_tree, meq_tree, rho_tree, u_tree)
+        fout_tree = map(
+            lambda m, Minv, C: jnp.dot(m + C, Minv), mout_tree, self.M_inv, C_tree
+        )
+        # fout_tree = self.apply_force(fout_tree, feq_tree, rho_tree, u_tree)
         return map(
             lambda fout: self.precisionPolicy.cast_to_output(fout),
             fout_tree,

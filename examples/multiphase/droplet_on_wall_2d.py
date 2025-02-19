@@ -1,8 +1,10 @@
 import os
+import jax.numpy as jnp
 import numpy as np
 
 from src.lattice import LatticeD2Q9
-from src.multiphase import Carnahan_Starling
+from src.eos import Carnahan_Starling
+from src.multiphase import MultiphaseBGK, MultiphaseMRT
 from src.boundary_conditions import BounceBack
 from src.utils import save_fields_vtk
 
@@ -15,13 +17,13 @@ a = 1.0
 b = 4.0
 R = 1.0
 
-rho_g = 0.000626568
-rho_l = 0.454078426
+rho_g = 0.014526085
+rho_l = 0.333241599
 Tc = 0.0943287031
-T = 0.5 * Tc
+T = 0.75 * Tc
 
 
-class DropletOnWall2D(Carnahan_Starling):
+class DropletOnWall2D(MultiphaseBGK):
     def initialize_macroscopic_fields(self):
         x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
         y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
@@ -30,7 +32,7 @@ class DropletOnWall2D(Carnahan_Starling):
         rho_tree = []
 
         dist = np.sqrt((x - r) ** 2 + (y - self.ny / 2) ** 2)
-        width = 3
+        width = 5
 
         rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
             2 * (dist - r) / width
@@ -80,6 +82,14 @@ class DropletOnWall2D(Carnahan_Starling):
         )
 
 
+kwargs = {
+    "a": a,
+    "b": b,
+    "R": R,
+    "T": T,
+}
+eos = Carnahan_Starling(**kwargs)
+
 precision = "f32/f32"
 kwargs = {
     "lattice": LatticeD2Q9(precision),
@@ -89,21 +99,22 @@ kwargs = {
     "nz": 0,
     "n_components": 1,
     "g_kkprime": -1.0 * np.ones((1, 1)),
-    "g_ks": [0.15],
+    "g_ks": [0.3],
+    "EOS": eos,
     "a": a,
     "b": b,
     "R": R,
     "T": T,
-    "k": 0.035,
-    "A": -0.32,
+    "k": 0.1,
+    "A": -0.31,
     # "k": 0.1,
     # "A": -0.31,
     "precision": precision,
-    "io_rate": 40000,
-    "print_info_rate": 40000,
+    "io_rate": 10000,
+    "print_info_rate": 10000,
     "checkpoint_rate": -1,  # Disable checkpointing
     "checkpoint_dir": os.path.abspath("./checkpoints_"),
     "restore_checkpoint": False,
 }
 sim = DropletOnWall2D(**kwargs)
-sim.run(280000)
+sim.run(240000)
