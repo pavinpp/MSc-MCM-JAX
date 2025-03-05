@@ -262,7 +262,7 @@ class Multiphase(LBMBase):
                 "Time to create the local masks and normal arrays:", time.time() - start
             )
 
-    @partial(jit, static_argnums=(0, 3))
+    @partial(jit, static_argnums=(0, 3), inline=True)
     def equilibrium(self, rho_tree, u_tree, cast_output=True):
         """
         Compute the equillibrium distribution function using the given density and velocity pytrees.
@@ -471,7 +471,7 @@ class Multiphase(LBMBase):
         )  # Component velocity
         return rho_tree, u_tree
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def macroscopic_velocity(self, f_tree, rho_tree):
         """
         macroscopic_velocity computes the velocity and incorporates forces
