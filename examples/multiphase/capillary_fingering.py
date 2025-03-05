@@ -68,11 +68,11 @@ class CapillaryFingering(MultiphaseMRT):
         return rho_tree, u_tree
 
     def set_boundary_conditions(self):
-        # coord = np.array([(i, j) for i in range(self.nx) for j in range(self.ny)])
-        # _, yy = coord[:, 0], coord[:, 1]
-        # poiseuille_profile = lambda x, x0, d, umax: np.maximum(
-        #     0.0, 4.0 * umax / (d**2) * ((x - x0) * d - (x - x0) ** 2)
-        # )
+        coord = np.array([(i, j) for i in range(self.nx) for j in range(self.ny)])
+        _, yy = coord[:, 0], coord[:, 1]
+        poiseuille_profile = lambda x, x0, d, umax: np.maximum(
+            0.0, 4.0 * umax / (d**2) * ((x - x0) * d - (x - x0) ** 2)
+        )
 
         # concatenate the indices of the left, right, and bottom walls
         walls = np.concatenate(
