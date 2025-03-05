@@ -5,10 +5,10 @@ import numpy as np
 from src.lattice import LatticeD2Q9
 from src.eos import VanderWaal
 from src.utils import save_fields_vtk
-from src.multiphase import MultiphaseMRT, MultiphaseBGK
+from src.multiphase import MultiphaseMRT
 
 
-r = 50
+r = 25
 nx = 200
 ny = 200
 
@@ -47,7 +47,7 @@ class Droplet2D(MultiphaseMRT):
 
         u = np.zeros((self.nx, self.ny, 2))
         u = self.distributed_array_init(
-            (self.nx, self.ny, 3), self.precisionPolicy.compute_dtype, init_val=u
+            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
         )
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
@@ -57,7 +57,7 @@ class Droplet2D(MultiphaseMRT):
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
         rho = np.array(kwargs["rho_tree"][0][1:-1, 1:-1, :])
-        p = np.array(kwargs["p_tree"][0][1:-1, 1:-1])
+        p = np.array(kwargs["p"][1:-1, 1:-1])
         u = np.array(kwargs["u_tree"][0][1:-1, 1:-1, :])
         timestep = kwargs["timestep"]
         fields = {
@@ -95,66 +95,66 @@ class Droplet2D(MultiphaseMRT):
         )
 
 
-e = LatticeD2Q9().c.T
-en = np.linalg.norm(e, axis=1)
+if __name__ == "__main__":
+    e = LatticeD2Q9().c.T
+    en = np.linalg.norm(e, axis=1)
 
-M = np.zeros((9, 9))
-M[0, :] = en**0
-M[1, :] = -4 * en**0 + 3 * en**2
-M[2, :] = 4 * en**0 - (21 / 2) * en**2 + (9 / 2) * en**4
-M[3, :] = e[:, 0]
-M[4, :] = (-5 * en**0 + 3 * en**2) * e[:, 0]
-M[5, :] = e[:, 1]
-M[6, :] = (-5 * en**0 + 3 * en**2) * e[:, 1]
-M[7, :] = e[:, 0] ** 2 - e[:, 1] ** 2
-M[8, :] = e[:, 0] * e[:, 1]
+    M = np.zeros((9, 9))
+    M[0, :] = en**0
+    M[1, :] = -4 * en**0 + 3 * en**2
+    M[2, :] = 4 * en**0 - (21 / 2) * en**2 + (9 / 2) * en**4
+    M[3, :] = e[:, 0]
+    M[4, :] = (-5 * en**0 + 3 * en**2) * e[:, 0]
+    M[5, :] = e[:, 1]
+    M[6, :] = (-5 * en**0 + 3 * en**2) * e[:, 1]
+    M[7, :] = e[:, 0] ** 2 - e[:, 1] ** 2
+    M[8, :] = e[:, 0] * e[:, 1]
 
-s_rho = [0.0]
-s_e = [1.57]
-s_eta = [1.03]
-s_j = [0.0]
-s_q = [1.0]
-s_v = [1.0]
+    s_rho = [0.0]
+    s_e = [0.5]
+    s_eta = [1.0]
+    s_j = [0.0]
+    s_q = [1.0]
+    s_v = [1.0]
 
+    kwargs = {
+        "a": a,
+        "b": b,
+        "R": R,
+        "T": T,
+    }
+    eos = VanderWaal(**kwargs)
 
-kwargs = {
-    "a": a,
-    "b": b,
-    "R": R,
-    "T": T,
-}
-eos = VanderWaal(**kwargs)
+    precision = "f32/f32"
+    kwargs = {
+        "n_components": 1,
+        "lattice": LatticeD2Q9(precision),
+        "nx": nx,
+        "ny": ny,
+        "nz": 0,
+        "g_kkprime": -1.0 * np.ones((1, 1)),
+        "g_ks": [0.0],
+        "EOS": eos,
+        "omega": [1.0],
+        "k": [0.7],
+        "A": 0.2 * np.ones((1, 1)),
+        "M": [M, M],
+        "s_rho": s_rho,
+        "s_e": s_e,
+        "s_eta": s_eta,
+        "s_j": s_j,
+        "s_q": s_q,
+        "s_v": s_v,
+        "kappa": [0.0],
+        "precision": precision,
+        "io_rate": 10000,
+        "compute_MLUPS": False,
+        "print_info_rate": 10000,
+        "checkpoint_rate": -1,
+        "checkpoint_dir": os.path.abspath("./checkpoints_"),
+        "restore_checkpoint": False,
+    }
 
-precision = "f32/f32"
-kwargs = {
-    "n_components": 1,
-    "lattice": LatticeD2Q9(precision),
-    "nx": nx,
-    "ny": ny,
-    "nz": 0,
-    "g_kkprime": -1.0 * np.ones((1, 1)),
-    "g_ks": [0.0],
-    "EOS": eos,
-    "omega": [1.0],
-    "k": [0.7],
-    "A": [0.2],
-    "s_rho": s_rho,
-    "s_e": s_e,
-    "s_eta": s_eta,
-    "s_j": s_j,
-    "s_q": s_q,
-    "s_v": [1.0],
-    "M": [M],
-    "kappa": [1.0],
-    "precision": precision,
-    "io_rate": 10000,
-    "compute_MLUPS": False,
-    "print_info_rate": 10000,
-    "checkpoint_rate": -1,
-    "checkpoint_dir": os.path.abspath("./checkpoints_"),
-    "restore_checkpoint": False,
-}
-
-os.system("rm -rf output*/ *.vtk")
-sim = Droplet2D(**kwargs)
-sim.run(30000)
+    os.system("rm -rf output*/ *.vtk")
+    sim = Droplet2D(**kwargs)
+    sim.run(30000)
