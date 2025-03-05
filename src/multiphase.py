@@ -25,7 +25,8 @@ from src.lattice import LatticeD2Q9, LatticeD3Q19
 from src.base import LBMBase
 from src.utils import downsample_field
 
-jax.config.update("jax_debug_nans", True)
+# This significantly reduces the performance. Use if necessary
+# jax.config.update("jax_debug_nans", True)
 
 
 class Multiphase(LBMBase):
@@ -58,9 +59,10 @@ class Multiphase(LBMBase):
     def __init__(self, **kwargs):
         self.n_components = kwargs.get("n_components")
         super().__init__(**kwargs)
+        self.no_force = kwargs.get("no_force", False)  # Single component simulation
         self.k = kwargs.get("k")
         self.A = kwargs.get("A")
-        self.eos = kwargs.get("EOS")
+        self.eos = kwargs.get("EOS", None)
         self.g_kkprime = kwargs.get("g_kkprime")  # Fluid-fluid interaction strength
         self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
         self.force = kwargs.get("body_force", None)
@@ -119,11 +121,7 @@ class Multiphase(LBMBase):
                 raise ValueError(
                     "The number of modification coefficients provided does not match the number of components in the system"
                 )
-            self._k = value
-        else:
-            raise ValueError(
-                "Modification coefficient k must be int, float or a list (for a multi-component flows)"
-            )
+        self._k = value
 
     @property
     def A(self):
@@ -133,20 +131,25 @@ class Multiphase(LBMBase):
     def A(self, value):
         if value is None:
             raise ValueError("Weight coefficient value must be provided")
-        if isinstance(value, float) or isinstance(value, int):
-            if self.n_components != 1:
+        if isinstance(value, np.ndarray):
+            if value.shape != (self.n_components, self.n_components):
                 raise ValueError(
-                    "The number of weighting factor values provided does not match the number of components in the system"
+                    "The dimensions of A should match the number of components"
                 )
-            self._A = [value]
-        elif isinstance(value, list):
-            if len(value) != self.n_components:
-                raise ValueError(
-                    "The number of weighting factor values provided does not match the number of components in the system"
-                )
-            self._A = value
-        else:
-            raise ValueError("Weight coefficient A must be int, float or a list")
+        self._A = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
+
+    # @property
+    # def force(self):
+    #     return self._force
+    #
+    # @force.setter
+    # def force(self, value):
+    #     if isinstance(value, list):
+    #         self._force = jnp.array(
+    #             np.array(value), dtype=self.precisionPolicy.compute_dtype
+    #         )
+    #     if isinstance(value, np.ndarray):
+    #         self._force = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
 
     @property
     def g_kkprime(self):
@@ -158,7 +161,7 @@ class Multiphase(LBMBase):
             value, jax.numpy.ndarray
         ):
             raise ValueError("g_kkprime must be a numpy array or jax.numpy.ndarray")
-        if np.shape(value) != (self.n_components, self.n_components):
+        if value.shape != (self.n_components, self.n_components):
             raise ValueError(
                 "g_kkprime must be a matrix of size n_components x n_components"
             )
@@ -174,6 +177,10 @@ class Multiphase(LBMBase):
     def g_ks(self, value):
         if len(value) != self.n_components:
             raise ValueError("g_ks must be a list size n_components")
+        if isinstance(value, np.ndarray):
+            value = self.distributed_array_init(
+                value.shape, self.precisionPolicy.compute_dtype, value
+            )
         self._g_ks = value
 
     def get_solid_mask_streamed(self):
@@ -415,16 +422,18 @@ class Multiphase(LBMBase):
             shape = (self.nx, self.ny, self.nz, self.q)
         f_tree = []
         if rho0_tree is not None and u0_tree is not None:
-            assert len(rho0_tree) == self.n_components, (
-                "The initial density values for all components must be provided"
-            )
+            assert (
+                len(rho0_tree) == self.n_components
+            ), "The initial density values for all components must be provided"
 
-            assert len(u0_tree) == self.n_components, (
-                "The initial velocity values for all components must be provided."
-            )
+            assert (
+                len(u0_tree) == self.n_components
+            ), "The initial velocity values for all components must be provided."
 
             for i in range(self.n_components):
                 rho0, u0 = rho0_tree[i], u0_tree[i]
+                rho0 = self.precisionPolicy.cast_to_compute(rho0)
+                u0 = self.precisionPolicy.cast_to_compute(u0)
                 f_tree.append(self.initialize_populations(rho0, u0))
         else:
             for i in range(self.n_components):
@@ -435,7 +444,7 @@ class Multiphase(LBMBase):
                 )
         return f_tree
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def update_macroscopic(
         self,
         f_tree,
@@ -524,8 +533,58 @@ class Multiphase(LBMBase):
         jax.numpy.ndarray
             Total velocity values.
         """
-        rho_total = self.compute_total_density(rho_tree)
-        return map(lambda rho, u: rho * u / rho_total, rho_tree, u_tree)
+        n = reduce(
+            operator.add,
+            map(
+                lambda rho, u, omega: rho * u * omega,
+                rho_tree,
+                u_tree,
+                self.omega,
+            ),
+        )
+        d = reduce(
+            operator.add,
+            map(
+                lambda rho, omega: rho * omega,
+                rho_tree,
+                self.omega,
+            ),
+        )
+        return n / d
+
+    @partial(jit, static_argnums=(0,))
+    def compute_pressure(self, rho_tree, psi_tree=None):
+        """
+        Generalized function for computing pressure. By default it uses equation
+        of state but it can be modified if the pseudopotential is computed using
+        a different method.
+
+        Parameters
+        ----------
+        p_tree: pytree of jax.numpy.ndarray
+            Pressure values for all components.
+
+        Returns
+        -------
+        pytree of jax.numpy.ndarray
+        """
+        return self.eos.EOS(rho_tree)
+
+    @partial(jit, static_argnums=(0,))
+    def compute_total_pressure(self, p_tree):
+        """
+        Cpmpute the total combined pressure from all components.
+
+        Parameters
+        ----------
+        p_tree: pytree of jax.numpy.ndarray
+            Pressure values for all components.
+
+        Returns
+        -------
+        jax.numpy.ndarray
+        """
+        return reduce(operator.add, p_tree)
 
     @partial(jit, static_argnums=(0,))
     def compute_potential(self, rho_tree):
@@ -543,7 +602,7 @@ class Multiphase(LBMBase):
         psi_tree: pytree of jax.numpy.ndarray
         """
         rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
-        p_tree = self.eos.EOS(rho_tree)
+        p_tree = self.compute_pressure(rho_tree)
         # Shan-Chen potential using modified pressure
         psi_tree = map(
             lambda k, p, rho, G: jnp.sqrt(2 * (k * p - self.lattice.cs2 * rho) / G),
@@ -611,6 +670,7 @@ class Multiphase(LBMBase):
         pytree of jax.numpy.ndarray
             Pytree of fluid-fluid interaction force.
         """
+        c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
         psi_s_tree = map(
             lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
             psi_tree,
@@ -619,7 +679,7 @@ class Multiphase(LBMBase):
             lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree
         )
 
-        def ffk_1(g_kkprime):
+        def ffk_1(Ai, g_kkprime):
             """
             Shan-Chen interaction force
             g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
@@ -630,36 +690,42 @@ class Multiphase(LBMBase):
             return reduce(
                 operator.add,
                 map(
-                    lambda G, psi_s: jnp.dot(
-                        G * self.G_ff * (1 - self.solid_mask_streamed) * psi_s,
-                        self.c.T,
+                    lambda A, G, psi_s: jnp.dot(
+                        (1 - A)
+                        * G
+                        * self.G_ff
+                        * (1 - self.solid_mask_streamed)
+                        * psi_s,
+                        c,
                     ),
+                    list(Ai),
                     list(g_kkprime),
                     psi_s_tree,
                 ),
             )
 
-        def ffk_2():
+        def ffk_2(Ai):
             """
             Zhang-Chen interaction force.
 
             Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
             fluid nodes are considered.
             """
-            return map(
-                lambda U_s: jnp.dot(
-                    self.G_ff * (1 - self.solid_mask_streamed) * U_s,
-                    self.c.T,
+            return reduce(
+                operator.add,
+                map(
+                    lambda A, U_s: A
+                    * jnp.dot(self.G_ff * (1 - self.solid_mask_streamed) * U_s, c),
+                    list(Ai),
+                    U_s_tree,
                 ),
-                U_s_tree,
             )
 
         return map(
-            lambda A, psi, nt_1, nt_2: (1 - A) * psi * nt_1 + A * nt_2,
-            self.A,
+            lambda psi, nt_1, nt_2: psi * nt_1 + nt_2,
             psi_tree,
-            list(vmap(ffk_1, in_axes=(0))(self.g_kkprime)),
-            ffk_2(),
+            list(vmap(ffk_1, in_axes=(0, 0))(self.A, self.g_kkprime)),
+            list(vmap(ffk_2, in_axes=(0))(self.A)),
         )
 
     @partial(jit, static_argnums=(0,))
@@ -721,7 +787,7 @@ class Multiphase(LBMBase):
             feq_tree,
         )
 
-    @partial(jit, static_argnums=(0, 4))
+    @partial(jit, static_argnums=(0, 4), inline=True)
     def apply_bc(self, fout_tree, fin_tree, timestep, implementation_step):
         """
         This function extends apply_bc to pytrees.
@@ -756,7 +822,7 @@ class Multiphase(LBMBase):
 
         return fout_tree
 
-    @partial(jit, static_argnums=(0,), donate_argnums=(1,))
+    @partial(jit, static_argnums=(0, 3), donate_argnums=(1,))
     def step(self, f_poststreaming_tree, timestep, return_fpost=False):
         """
         This function performs a single step of the LBM simulation.
@@ -875,11 +941,10 @@ class Multiphase(LBMBase):
                     ),
                     rho_prev_tree,
                 )
-                p_prev_tree = self.eos.EOS(rho_prev_tree)
-                p_prev_tree = map(
-                    lambda p_prev: downsample_field(p_prev, self.downsamplingFactor),
-                    p_prev_tree,
-                )
+                psi_prev_tree, _ = self.compute_potential(rho_prev_tree)
+                p_prev_tree = self.compute_pressure(rho_prev_tree, psi_prev_tree)
+                p_prev_total = self.compute_total_pressure(p_prev_tree)
+                p_prev_total = downsample_field(p_prev_total, self.downsamplingFactor)
                 u_prev_tree = map(
                     lambda u_prev: downsample_field(u_prev, self.downsamplingFactor),
                     u_prev_tree,
@@ -888,7 +953,7 @@ class Multiphase(LBMBase):
                 u_total_prev = self.compute_total_velocity(rho_prev_tree, u_prev_tree)
 
                 # Gather the data from all processes and convert it to numpy arrays (move to host memory)
-                p_prev_tree = map(lambda p_prev: process_allgather(p_prev), p_prev_tree)
+                p_prev_total = process_allgather(p_prev_total)
                 rho_prev_tree = map(
                     lambda rho_prev: process_allgather(rho_prev), rho_prev_tree
                 )
@@ -914,10 +979,10 @@ class Multiphase(LBMBase):
                 print(f"Saving data at timestep {timestep}/{t_max}")
                 rho_tree, _ = self.update_macroscopic(f_tree)
                 u_tree = self.macroscopic_velocity(f_tree, rho_tree)
-                p_tree = self.eos.EOS(rho_tree)
-                p_tree = map(
-                    lambda p: downsample_field(p, self.downsamplingFactor), p_tree
-                )
+                psi_tree, _ = self.compute_potential(rho_tree)
+                p_tree = self.compute_pressure(rho_tree, psi_tree)
+                p_total = self.compute_total_pressure(p_tree)
+                p_total = downsample_field(p_total, self.downsamplingFactor)
                 rho_tree = map(
                     lambda rho: downsample_field(rho, self.downsamplingFactor),
                     rho_tree,
@@ -930,7 +995,7 @@ class Multiphase(LBMBase):
                 u_total = self.compute_total_velocity(rho_tree, u_tree)
 
                 # Gather the data from all processes and convert it to numpy arrays (move to host memory)
-                p_tree = map(lambda p: process_allgather(p), p_tree)
+                p_total = process_allgather(p_total)
                 rho_tree = map(lambda rho: process_allgather(rho), rho_tree)
                 u_tree = map(lambda u: process_allgather(u), u_tree)
                 rho_total = process_allgather(rho_total)
@@ -942,11 +1007,13 @@ class Multiphase(LBMBase):
                     f_tree,
                     fstar_tree,
                     p_tree,
-                    u_total,
+                    p_total,
                     u_tree,
+                    u_total,
                     rho_total,
                     rho_tree,
                     p_prev_tree,
+                    p_prev_total,
                     u_total_prev,
                     u_prev_tree,
                     rho_total_prev,
@@ -1019,11 +1086,13 @@ class Multiphase(LBMBase):
         f_tree,
         fstar_tree,
         p_tree,
-        u_total,
+        p_total,
         u_tree,
+        u_total,
         rho_total,
         rho_tree,
         p_prev_tree,
+        p_prev_total,
         u_total_prev,
         u_prev_tree,
         rho_total_prev,
@@ -1043,8 +1112,10 @@ class Multiphase(LBMBase):
             Pytree of post-streaming distribution functions at the current time step.
         fstar_tree: pytree of jax.numpy.ndarray
             Pytree of post-collision distribution functions at the current time step.
-        p_tree: pytree of jax.numpy.ndarray
-            Pytree of pressure field at the current time step.
+        p_tree: Pytree of jax.numpy.ndarray
+            Pressure field at the current time step for each component.
+        p: jax.numpy.ndarray
+            Pressure field at the current time step.
         u_total: jax.numpy.ndarray
             Total velocity field at the current time step.
         u_tree: pytree of jax.numpy.ndarray
@@ -1053,8 +1124,10 @@ class Multiphase(LBMBase):
             Total density field at the current time step.
         rho_tree: pytree of jax.numpy.ndarray
             Pytree of density field at the current time step.
-        p_prev_tree: pytree of jax.numpy.ndarray
-            Pytree of pressure field at the previous time step.
+        p_prev_tree: Pytree of jax.numpy.ndarray
+            Pressure field at the previous time step for each component.
+        p_prev: jax.numpy.ndarray
+            Pressure field at the previous time step.
         u_total_prev: jax.numpy.ndarray
             Total velocity field at the previous time step.
         u_prev_tree: pytree of jax.numpy.ndarray
@@ -1070,11 +1143,13 @@ class Multiphase(LBMBase):
             "rho_total": rho_total,
             "rho_tree": rho_tree,
             "p_tree": p_tree,
+            "p": p_total,
             "u_total": u_total,
             "u_tree": u_tree,
             "rho_total_prev": rho_total_prev,
             "rho_prev_tree": rho_prev_tree,
             "p_prev_tree": p_prev_tree,
+            "p_prev": p_prev_total,
             "u_total_prev": u_total_prev,
             "u_prev_tree": u_prev_tree,
             "f_poststreaming_tree": f_tree,
@@ -1213,8 +1288,8 @@ class MultiphaseMRT(Multiphase):
             )
 
             def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
-                C = jnp.zeros(
-                    (self.nx, self.ny, self.lattice.q),
+                C = jnp.zeros_like(
+                    psi,
                     dtype=self.precisionPolicy.compute_dtype,
                 )
                 qxx = -kappa * (
@@ -1237,7 +1312,7 @@ class MultiphaseMRT(Multiphase):
                     kappa, A, s_v, s_e, s_eta, psi, psi_s
                 ),
                 self.kappa,
-                self.A,
+                list(self.A.diagonal()),
                 self.s_v,
                 self.s_e,
                 self.s_eta,
@@ -1255,7 +1330,7 @@ class MultiphaseMRT(Multiphase):
 
             def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
                 C = jnp.zeros(
-                    (self.nx, self.ny, self.nz, self.lattice.q),
+                    psi,
                     dtype=self.precisionPolicy.compute_dtype,
                 )
                 qxx = -kappa * (
@@ -1289,7 +1364,7 @@ class MultiphaseMRT(Multiphase):
                     kappa, A, s_v, s_e, s_eta, psi, psi_s
                 ),
                 self.kappa,
-                self.A,
+                list(self.A.diagonal()),
                 self.s_v,
                 self.s_e,
                 self.s_eta,

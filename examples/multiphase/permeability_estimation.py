@@ -1,0 +1,171 @@
+import os
+import operator
+import numpy as np
+
+from src.lattice import LatticeD3Q19
+from src.utils import save_fields_vtk
+from src.multiphase import MultiphaseBGK
+from src.boundary_conditions import BounceBack, Regularized
+
+from functools import partial
+from jax import jit, vmap
+from jax.tree import map, reduce
+import jax.numpy as jnp
+import h5py
+from urllib.request import urlretrieve
+
+
+# Geometry downloaded from Digital Rocks Portal
+# https://www.digitalrocksportal.org/projects/372
+
+urlretrieve(
+    "https://www.digitalrocksportal.org/projects/372/origin_data/2165/",
+    "374_03_09_256.mat",
+)
+os.system("mv 374_03_09_256.mat ./assets")
+
+
+class PorousMedia(MultiphaseBGK):
+    def initialize_macroscopic_fields(self):
+        rho_tree = []
+
+        rho = np.ones((self.nx, self.ny, self.nz, 1))
+        rho = self.distributed_array_init(
+            (self.nx, self.ny, self.nz, 1),
+            self.precisionPolicy.compute_dtype,
+            init_val=rho,
+        )
+        rho = self.precisionPolicy.cast_to_output(rho)
+        rho_tree.append(rho)
+
+        u = np.zeros((self.nx, self.ny, self.nz, 3))
+        u = self.distributed_array_init(
+            (self.nx, self.ny, self.nz, 3),
+            self.precisionPolicy.compute_dtype,
+            init_val=u,
+        )
+        u = self.precisionPolicy.cast_to_output(u)
+        u_tree = []
+        u_tree.append(u)
+        return rho_tree, u_tree
+
+    def set_boundary_conditions(self):
+        # apply inlet equilibrium boundary condition at the left
+        inlet = self.boundingBoxIndices["left"]
+        rho_inlet = np.ones(
+            (inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype
+        )
+        self.BCs[0].append(
+            Regularized(
+                tuple(inlet.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                "pressure",
+                rho_inlet,
+            )
+        )
+
+        # Same at the outlet
+        outlet = self.boundingBoxIndices["right"]
+        rho_outlet = np.ones(
+            (outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype
+        )
+        self.BCs[0].append(
+            Regularized(
+                tuple(outlet.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                "pressure",
+                rho_outlet,
+            )
+        )
+
+        # Wall boundary condition
+        geometry = h5py.File("./assets/374_09_03_256.mat", "r")
+        bin = np.array(geometry["bin"], dtype=int)
+        id = np.where(bin == 1.0)
+        idx = np.zeros((len(id[0]), 3), dtype=int)
+        idx[:, 0] = id[0]
+        idx[:, 1] = id[1]
+        idx[:, 2] = id[2]
+        wall = np.concatenate(
+            (
+                idx,
+                self.boundingBoxIndices["top"],
+                self.boundingBoxIndices["bottom"],
+                self.boundingBoxIndices["front"],
+                self.boundingBoxIndices["back"],
+            )
+        )
+        self.BCs[0].append(
+            BounceBack(tuple(wall.T), self.gridInfo, self.precisionPolicy)
+        )
+
+    @partial(jit, static_argnums=(0,))
+    def compute_potential(self, rho_tree):
+        U_tree = map(lambda rho: jnp.zeros_like(rho), rho_tree)
+        return rho_tree, U_tree
+
+    @partial(jit, static_argnums=(0,))
+    def compute_pressure(self, rho_tree, psi_tree):
+        def f(g_kk):
+            return reduce(
+                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
+            )
+
+        return map(
+            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
+            rho_tree,
+            psi_tree,
+            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
+        )
+
+    def output_data(self, **kwargs):
+        # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
+        rho = np.array(kwargs.get("rho_tree")[0][0, ...])
+        p = np.array(kwargs["p_tree"][0])
+        u = np.array(kwargs["u_tree"][0][0, ...])
+        timestep = kwargs["timestep"]
+        fields = {
+            "p": p[..., 0],
+            "rho": rho[..., 0],
+            "ux": u[..., 0],
+            "uy": u[..., 1],
+        }
+        save_fields_vtk(
+            timestep,
+            fields,
+            "output",
+            "data",
+        )
+
+
+if __name__ == "__main__":
+    precision = "f32/f32"
+    g_kkprime = 0 * np.ones((1, 1))
+    nx = 256
+    ny = 256
+    nz = 256
+
+    kwargs = {
+        "n_components": 1,
+        "lattice": LatticeD3Q19(precision),
+        "nx": nx,
+        "ny": ny,
+        "nz": nz,
+        "g_kkprime": g_kkprime,
+        "g_ks": [0.0],
+        "omega": [1.0],
+        "precision": precision,
+        "k": [0],
+        "A": np.zeros((1, 1)),
+        "io_rate": 1000,
+        "compute_MLUPS": False,
+        "print_info_rate": 1000,
+        "checkpoint_rate": -1,
+        "checkpoint_dir": os.path.abspath("./checkpoints_"),
+        "restore_checkpoint": False,
+    }
+    # os.system("rm -rf output*/ *.vtk")
+    sim = PorousMedia(**kwargs)
+    sim.run(100000)

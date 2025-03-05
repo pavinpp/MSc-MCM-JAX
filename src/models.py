@@ -269,3 +269,36 @@ class AdvectionDiffusionBGK(LBMBase):
         fneq = f - feq
         fout = f - self.omega * fneq
         return self.precisionPolicy.cast_to_output(fout)
+
+
+class MRTSim(LBMBase):
+    """
+    Multi-relaxation time model.
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.update({"omega": 1.0})
+        super().__init__(**kwargs)
+        self.M_inv = jnp.array(
+            np.transpose(np.linalg.inv(kwargs.get("M"))),
+            dtype=self.precisionPolicy.compute_dtype,
+        )
+        self.M = jnp.array(
+            np.transpose(kwargs.get("M")), dtype=self.precisionPolicy.compute_dtype
+        )
+        self.S = jnp.array(kwargs.get("S"), dtype=self.precisionPolicy.compute_dtype)
+
+    @partial(jit, static_argnums=(0,), donate_argnums=(1,))
+    def collision(self, f):
+        """
+        MRT collision step for lattice.
+        """
+        f = self.precisionPolicy.cast_to_compute(f)
+        m = jnp.dot(f, self.M)
+        rho, u = self.update_macroscopic(f)
+        feq = self.equilibrium(rho, u)
+        meq = jnp.dot(feq, self.M)
+        mout = -jnp.dot(m - meq, self.S)
+        if self.force is not None:
+            mout = self.apply_force(mout, meq, rho, u)
+        return self.precisionPolicy.cast_to_output(f + jnp.dot(mout, self.M_inv))

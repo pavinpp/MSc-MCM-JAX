@@ -423,23 +423,6 @@ class LBMBase(object):
             bc.create_local_mask_and_normal_arrays(grid_mask)
         print("Time to create the local masks and normal arrays:", time.time() - start)
 
-    # This is another non-JITed way of creating the distributed arrays. It is not used at the moment.
-    # def distributed_array_init(self, shape, type, init_val=None):
-    #     sharding_dim = shape[0] // self.nDevices
-    #     sharded_shape = (self.nDevices, sharding_dim,  *shape[1:])
-    #     device_shape = sharded_shape[1:]
-    #     arrays = []
-
-    #     for d, index in self.sharding.addressable_devices_indices_map(sharded_shape).items():
-    #         jax.default_device = d
-    #         if init_val is None:
-    #             x = jnp.zeros(shape=device_shape, dtype=type)
-    #         else:
-    #             x = jnp.full(shape=device_shape, fill_value=init_val, dtype=type)
-    #         arrays += [jax.device_put(x, d)]
-    #     jax.default_device = jax.devices()[0]
-    #     return jax.make_array_from_single_device_arrays(shape, self.sharding, arrays)
-
     @partial(jit, static_argnums=(0, 1, 2, 4))
     def distributed_array_init(self, shape, type, init_val=0, sharding=None):
         """

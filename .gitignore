@@ -22,6 +22,10 @@ tasks.json
 !logo-transparent.png
 !building.png
 !XLB_diff.png
+
+# Geometry file
+assets/*.mat
+
 # Vagrant
 .vagrant/
 
