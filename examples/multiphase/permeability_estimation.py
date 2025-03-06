@@ -1,3 +1,9 @@
+"""
+Single phase absolute permeability estimation for a porous media. A pressure gradient is specified along the flow direction and the mean steady state flow velocity
+is used for computing permeability. The simulations is run for 50,000 lattice time steps to ensure steady state is reached. An alternative way could be to have a convergence
+check in the output_data function, similar to how pressure difference and error % for predicted density is measured in the droplet_2d example.
+"""
+
 import os
 import operator
 import numpy as np
