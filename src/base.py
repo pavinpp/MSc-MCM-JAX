@@ -17,7 +17,7 @@ from jax import jit, lax, vmap
 from jax.experimental import mesh_utils
 from jax.experimental.multihost_utils import process_allgather
 from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, NamedSharding, PartitionSpec, PositionalSharding
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from termcolor import colored
 
 # Local/Custom Libraries
