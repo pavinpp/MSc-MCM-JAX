@@ -138,18 +138,18 @@ class Multiphase(LBMBase):
                 )
         self._A = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
 
-    # @property
-    # def force(self):
-    #     return self._force
-    #
-    # @force.setter
-    # def force(self, value):
-    #     if isinstance(value, list):
-    #         self._force = jnp.array(
-    #             np.array(value), dtype=self.precisionPolicy.compute_dtype
-    #         )
-    #     if isinstance(value, np.ndarray):
-    #         self._force = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
+    @property
+    def force(self):
+        return self._force
+
+    @force.setter
+    def force(self, value):
+        if isinstance(value, list):
+            self._force = jnp.array(
+                np.array(value), dtype=self.precisionPolicy.compute_dtype
+            )
+        if isinstance(value, np.ndarray):
+            self._force = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
 
     @property
     def g_kkprime(self):
@@ -185,7 +185,8 @@ class Multiphase(LBMBase):
 
     def get_solid_mask_streamed(self):
         """
-        Define the solid mask used for fluid-solid interaction force.
+        Define the solid mask used for fluid-solid interaction force. Currently the same solid mask is used by all components.
+        Modify to have solid_mask_streamed for each component (useful for component specific boundary condition).
 
         Parameters
         ----------
@@ -691,11 +692,7 @@ class Multiphase(LBMBase):
                 operator.add,
                 map(
                     lambda A, G, psi_s: jnp.dot(
-                        (1 - A)
-                        * G
-                        * self.G_ff
-                        * (1 - self.solid_mask_streamed)
-                        * psi_s,
+                        (1 - A) * G * self.G_ff * psi_s,
                         c,
                     ),
                     list(Ai),
@@ -714,8 +711,7 @@ class Multiphase(LBMBase):
             return reduce(
                 operator.add,
                 map(
-                    lambda A, U_s: A
-                    * jnp.dot(self.G_ff * (1 - self.solid_mask_streamed) * U_s, c),
+                    lambda A, U_s: A * jnp.dot(self.G_ff * U_s, c),
                     list(Ai),
                     U_s_tree,
                 ),
@@ -744,15 +740,26 @@ class Multiphase(LBMBase):
             Pytree of fluid-solid interaction force.
         """
         return map(
-            lambda g_ks, rho: -g_ks * rho * jnp.dot(self.solid_mask_streamed, self.c.T),
+            lambda g_ks, rho: -g_ks
+            * rho
+            * jnp.dot(self.G_fs * self.solid_mask_streamed, self.c.T),
             self.g_ks,
             rho_tree,
         )
         # psi_tree, _ = self.compute_potential(rho_tree)
+        # psi_s_tree = map(
+        #     lambda psi: self.streaming(
+        #         jnp.repeat(psi, axis=-1, repeats=self.lattice.q)
+        #     ),
+        #     psi_tree,
+        # )
         # return map(
-        #     lambda g_ks, psi: -g_ks * psi * jnp.dot(self.solid_mask_streamed, self.c.T),
+        #     lambda g_ks, psi, psi_s: -g_ks
+        #     * psi
+        #     * jnp.dot(self.G_fs * self.solid_mask_streamed * psi_s, self.c.T),
         #     self.g_ks,
         #     psi_tree,
+        #     psi_s_tree,
         # )
 
     @partial(jit, static_argnums=(0,), inline=True)

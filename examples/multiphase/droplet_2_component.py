@@ -1,3 +1,10 @@
+"""
+Multi-component droplet example, can be used for computing surface tension coefficient, tuning various parameters.
+
+The collision matrix is based on:
+1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+"""
+
 import os
 import operator
 import numpy as np
@@ -15,7 +22,7 @@ import jax.numpy as jnp
 nx = 200
 ny = 200
 
-tau_2 = 1.5
+tau_2 = 1.9
 v_2 = (tau_2 - 0.5) / 3
 
 M = 10.0  # set
@@ -23,11 +30,13 @@ v_1 = v_2 / M
 tau_1 = 3 * v_1 + 0.5
 
 rho_2 = 1.0
-rho_1 = 1.5
+rho_1 = 1.0
 width = 5
 
 rho_t = rho_1 + rho_2
 
+# Fraction of total density in the bulk of one component
+# It needs to be non-zero value to prevent NaN values.
 fraction = 0.97
 
 
@@ -97,15 +106,15 @@ class Droplet2D(MultiphaseMRT):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs.get("rho_total")[1:-1, 1:-1, :])
-        rho_1 = np.array(kwargs["rho_tree"][0][1:-1, 1:-1, :])
-        rho_2 = np.array(kwargs["rho_tree"][1][1:-1, 1:-1, :])
+        rho = np.array(kwargs.get("rho_total")[0, 1:-1, 1:-1, :])
+        rho_1 = np.array(kwargs["rho_tree"][0][0, 1:-1, 1:-1, :])
+        rho_2 = np.array(kwargs["rho_tree"][1][0, 1:-1, 1:-1, :])
         p_1 = np.array(kwargs["p_tree"][0][1:-1, 1:-1])
         p_2 = np.array(kwargs["p_tree"][1][1:-1, 1:-1])
-        p = np.array(kwargs["p"][1:-1, 1:-1])
-        u_1 = np.array(kwargs["u_tree"][0][1:-1, 1:-1, :])
-        u_2 = np.array(kwargs["u_tree"][1][1:-1, 1:-1, :])
-        u = np.array(kwargs["u_total"][1:-1, 1:-1, :])
+        p = np.array(kwargs["p"][0, 1:-1, 1:-1])
+        u_1 = np.array(kwargs["u_tree"][0][0, 1:-1, 1:-1, :])
+        u_2 = np.array(kwargs["u_tree"][1][0, 1:-1, 1:-1, :])
+        u = np.array(kwargs["u_total"][0, 1:-1, 1:-1, :])
         timestep = kwargs["timestep"]
         fields = {
             "p": p[..., 0],
@@ -131,24 +140,24 @@ class Droplet2D(MultiphaseMRT):
             p_north + p_south + p_west + p_east
         )
         print(f"Pressure difference for radius = {r}: {pressure_difference}")
-        # save_fields_vtk(
-        #     timestep,
-        #     fields,
-        #     "output",
-        #     "data",
-        # )
+        save_fields_vtk(
+            timestep,
+            fields,
+            f"output_{r}",
+            "data",
+        )
 
 
 if __name__ == "__main__":
     precision = "f32/f32"
-    g_kkprime = 0 * np.ones((2, 2))
+    g_kkprime = -0.027 * np.ones((2, 2))
     # for g in np.linspace(0, 1.0, 100):
-    g = 0.46
+    g = 0.57
     g_kkprime[0, 1] = g
     g_kkprime[1, 0] = g
+
     e = LatticeD2Q9().c.T
     en = np.linalg.norm(e, axis=1)
-
     M = np.zeros((9, 9))
     M[0, :] = en**0
     M[1, :] = -4 * en**0 + 3 * en**2
@@ -196,6 +205,6 @@ if __name__ == "__main__":
             "restore_checkpoint": False,
         }
 
-        os.system("rm -rf output*/ *.vtk")
+        # os.system("rm -rf output*/ *.vtk")
         sim = Droplet2D(**kwargs)
-        sim.run(10)
+        sim.run(30000)

@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 from src.lattice import LatticeD3Q19
-from src.multiphase import MultiphaseMRT, MultiphaseBGK
+from src.multiphase import MultiphaseMRT
 from src.eos import VanderWaal
 from src.utils import save_fields_vtk
 
@@ -106,79 +106,80 @@ class Droplet3D(MultiphaseMRT):
         )
 
 
-s_rho = [0.0]
-s_e = [1.57]
-s_eta = [1.03]
-s_j = [0.0]
-s_q = [1.0]
-s_m = [1.0]
-s_pi = [1.0]
-s_v = [1.0]
+if __name__ == "__main__":
+    s_rho = [0.0]
+    s_e = [1.57]
+    s_eta = [1.03]
+    s_j = [0.0]
+    s_q = [1.0]
+    s_m = [1.0]
+    s_pi = [1.0]
+    s_v = [1.0]
 
-kwargs = {
-    "a": a,
-    "b": b,
-    "R": R,
-    "T": T,
-}
-eos = VanderWaal(**kwargs)
+    kwargs = {
+        "a": a,
+        "b": b,
+        "R": R,
+        "T": T,
+    }
+    eos = VanderWaal(**kwargs)
 
-e = LatticeD3Q19().c.T
-en = np.linalg.norm(e, axis=1)
+    e = LatticeD3Q19().c.T
+    en = np.linalg.norm(e, axis=1)
 
-M = np.zeros((19, 19))
-M[0, :] = en**0
-M[1, :] = 19 * en**2 - 30
-M[2, :] = (21 * en**4 - 53 * en**2 + 24) / 2
-M[3, :] = e[:, 0]
-M[4, :] = (5 * en**2 - 9) * e[:, 0]
-M[5, :] = e[:, 1]
-M[6, :] = (5 * en**2 - 9) * e[:, 1]
-M[7, :] = e[:, 2]
-M[8, :] = (5 * en**2 - 9) * e[:, 2]
-M[9, :] = 3 * e[:, 0] ** 2 - en**2
-M[10, :] = (3 * en**2 - 5) * (3 * e[:, 0] ** 2 - en**2)
-M[11, :] = e[:, 1] ** 2 - e[:, 2] ** 2
-M[12, :] = (3 * en**2 - 5) * (e[:, 1] ** 2 - e[:, 2] ** 2)
-M[13, :] = e[:, 0] * e[:, 1]
-M[14, :] = e[:, 1] * e[:, 2]
-M[15, :] = e[:, 0] * e[:, 2]
-M[16, :] = (e[:, 1] ** 2 - e[:, 2] ** 2) * e[:, 0]
-M[17, :] = (e[:, 2] ** 2 - e[:, 0] ** 2) * e[:, 1]
-M[18, :] = (e[:, 0] ** 2 - e[:, 1] ** 2) * e[:, 2]
+    M = np.zeros((19, 19))
+    M[0, :] = en**0
+    M[1, :] = 19 * en**2 - 30
+    M[2, :] = (21 * en**4 - 53 * en**2 + 24) / 2
+    M[3, :] = e[:, 0]
+    M[4, :] = (5 * en**2 - 9) * e[:, 0]
+    M[5, :] = e[:, 1]
+    M[6, :] = (5 * en**2 - 9) * e[:, 1]
+    M[7, :] = e[:, 2]
+    M[8, :] = (5 * en**2 - 9) * e[:, 2]
+    M[9, :] = 3 * e[:, 0] ** 2 - en**2
+    M[10, :] = (3 * en**2 - 5) * (3 * e[:, 0] ** 2 - en**2)
+    M[11, :] = e[:, 1] ** 2 - e[:, 2] ** 2
+    M[12, :] = (3 * en**2 - 5) * (e[:, 1] ** 2 - e[:, 2] ** 2)
+    M[13, :] = e[:, 0] * e[:, 1]
+    M[14, :] = e[:, 1] * e[:, 2]
+    M[15, :] = e[:, 0] * e[:, 2]
+    M[16, :] = (e[:, 1] ** 2 - e[:, 2] ** 2) * e[:, 0]
+    M[17, :] = (e[:, 2] ** 2 - e[:, 0] ** 2) * e[:, 1]
+    M[18, :] = (e[:, 0] ** 2 - e[:, 1] ** 2) * e[:, 2]
 
-precision = "f32/f32"
-kwargs = {
-    "n_components": 1,
-    "lattice": LatticeD3Q19(precision),
-    "omega": [1.0],
-    "nx": nx,
-    "ny": ny,
-    "nz": nz,
-    "g_kkprime": -1.0 * np.ones((1, 1)),
-    "g_ks": [0.0],
-    "EOS": eos,
-    "k": [0.01],
-    "A": [0.2],
-    "s_rho": s_rho,
-    "s_e": s_e,
-    "s_eta": s_eta,
-    "s_j": s_j,
-    "s_q": s_q,
-    "s_pi": s_pi,
-    "s_m": s_m,
-    "s_v": [1.0],
-    "M": [M],
-    "kappa": [0.0],
-    "precision": precision,
-    "io_rate": 10000,
-    "compute_MLUPS": False,
-    "print_info_rate": 10000,
-    "checkpoint_rate": -1,
-    "checkpoint_dir": os.path.abspath("./checkpoints_"),
-    "restore_checkpoint": False,
-}
+    precision = "f32/f32"
+    kwargs = {
+        "n_components": 1,
+        "lattice": LatticeD3Q19(precision),
+        "omega": [1.0],
+        "nx": nx,
+        "ny": ny,
+        "nz": nz,
+        "g_kkprime": -1.0 * np.ones((1, 1)),
+        "g_ks": [0.0],
+        "EOS": eos,
+        "k": [0.01],
+        "A": [0.2],
+        "s_rho": s_rho,
+        "s_e": s_e,
+        "s_eta": s_eta,
+        "s_j": s_j,
+        "s_q": s_q,
+        "s_pi": s_pi,
+        "s_m": s_m,
+        "s_v": [1.0],
+        "M": [M],
+        "kappa": [0.0],
+        "precision": precision,
+        "io_rate": 10000,
+        "compute_MLUPS": False,
+        "print_info_rate": 10000,
+        "checkpoint_rate": -1,
+        "checkpoint_dir": os.path.abspath("./checkpoints_"),
+        "restore_checkpoint": False,
+    }
 
-os.system("rm -rf output*/ *.vtk")
-sim = Droplet3D(**kwargs)
-sim.run(30000)
+    os.system("rm -rf output*/ *.vtk")
+    sim = Droplet3D(**kwargs)
+    sim.run(30000)
