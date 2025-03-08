@@ -35,7 +35,7 @@ rho_t = rho_1 + rho_2
 fraction = 0.97
 
 # Channel dimensions
-width = 15  # Width of the inlet and outlet channel
+width = 12  # Width of the inlet and outlet channel
 
 inlet = np.array(
     [[0, y] for y in np.arange(ny // 2 - width / 2, ny // 2 + width // 2)], dtype=int
@@ -49,7 +49,7 @@ outlet = np.array(
 # Elliptical dimensions
 a = 45  # Major axis length for the obstacle
 b = 25  # Minor axis length for the obstacle
-offset = 7  # Offset for obstacle to define different channels with different widths
+offset = 4  # Offset for obstacle to define different channels with different widths
 
 x = np.linspace(0, nx - 1, nx, dtype=int)
 y = np.linspace(0, ny - 1, ny, dtype=int)
@@ -69,7 +69,7 @@ mask[obstacle <= 0] = 1
 walls = np.where(mask == 1)
 
 
-class CapillaryFingering(MultiphaseMRT):
+class PoreDoublet(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
         rho_tree = []
 
@@ -288,7 +288,7 @@ if __name__ == "__main__":
         "ny": ny,
         "nz": 0,
         "g_kkprime": g_kkprime,
-        "g_ks": [0.01, 0.0],
+        "g_ks": [0.5, 0.0],
         "body_force": [0.0, 0.0],
         "omega": [1 / tau_1, 1 / tau_2],
         "precision": precision,
@@ -299,7 +299,7 @@ if __name__ == "__main__":
         "s_j": s_j,
         "s_q": s_q,
         "s_v": s_v,
-        "kappa": [0.0, 0.0],
+        "kappa": [0.1, 0.0],
         "k": [0, 0],
         "A": np.zeros((2, 2)),
         "io_rate": 100,
@@ -310,5 +310,5 @@ if __name__ == "__main__":
         "restore_checkpoint": False,
     }
     # os.system("rm -rf output*/ *.vtk")
-    sim = CapillaryFingering(**kwargs)
+    sim = PoreDoublet(**kwargs)
     sim.run(30000)
