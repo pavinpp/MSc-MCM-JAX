@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pylab as plt
 from matplotlib import cm
-import numpy as np
 from time import time
 import pyvista as pv
 from jax.image import resize
@@ -117,9 +116,9 @@ def save_fields_vtk(timestep, fields, output_dir=".", prefix="fields"):
         if key == list(fields.keys())[0]:
             dimensions = value.shape
         else:
-            assert (
-                value.shape == dimensions
-            ), "All fields must have the same dimensions!"
+            assert value.shape == dimensions, (
+                "All fields must have the same dimensions!"
+            )
 
     if not os.path.exists("./" + output_dir):
         print(

@@ -64,8 +64,13 @@ class Multiphase(LBMBase):
         self.A = kwargs.get("A")
         self.eos = kwargs.get("EOS", None)
         self.g_kkprime = kwargs.get("g_kkprime")  # Fluid-fluid interaction strength
-        self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
+        # self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
         self.force = kwargs.get("body_force", None)
+
+        # set contact angle using improved virtual density scheme
+        self.theta_tree = kwargs.get("theta", None)
+        self.phi_tree = kwargs.get("phi", None)
+        self.delta_rho_tree = kwargs.get("delta_rho", None)
 
         self.G_ff = self.compute_ff_greens_function()
         self.G_fs = self.compute_fs_greens_function()
@@ -169,19 +174,82 @@ class Multiphase(LBMBase):
             raise ValueError("g_kkprime must be a symmetric matrix")
         self._g_kkprime = np.array(value)
 
-    @property
-    def g_ks(self):
-        return self._g_ks
+    # @property
+    # def g_ks(self):
+    #     return self._g_ks
+    #
+    # @g_ks.setter
+    # def g_ks(self, value):
+    #     if len(value) != self.n_components:
+    #         raise ValueError("g_ks must be a list size n_components")
+    #     if isinstance(value, np.ndarray):
+    #         value = self.distributed_array_init(
+    #             value.shape, self.precisionPolicy.compute_dtype, value
+    #         )
+    #     self._g_ks = value
 
-    @g_ks.setter
-    def g_ks(self, value):
-        if len(value) != self.n_components:
-            raise ValueError("g_ks must be a list size n_components")
-        if isinstance(value, np.ndarray):
-            value = self.distributed_array_init(
-                value.shape, self.precisionPolicy.compute_dtype, value
+    @property
+    def theta_tree(self):
+        return self._theta_tree
+
+    @theta_tree.setter
+    def theta_tree(self, value):
+        if not isinstance(value, list):
+            raise ValueError(
+                "Contact angle for all components must be provided in a list to use improved virtual density scheme"
             )
-        self._g_ks = value
+        if len(value) != self.n_components:
+            raise ValueError(
+                "Contact angle must be provided for all components to use improved virtual density scheme"
+            )
+        for i in range(self.n_components):
+            if isinstance(value[i], np.ndarray):
+                value[i] = self.precisionPolicy.cast_to_output(
+                    jax.numpy.array(value[i], dtype=self.precisionPolicy.compute_dtype)
+                )
+        self._theta_tree = value
+
+    @property
+    def phi_tree(self):
+        return self._phi_tree
+
+    @phi_tree.setter
+    def phi_tree(self, value):
+        if not isinstance(value, list):
+            raise ValueError(
+                "Contact angle adjustment parameter phi must be provided for all components in a list to use improved virtual density scheme"
+            )
+        if len(value) != self.n_components:
+            raise ValueError(
+                "phi must be provided for all components to use improved virtual density scheme"
+            )
+        for i in range(self.n_components):
+            if isinstance(value[i], np.ndarray):
+                value[i] = self.precisionPolicy.cast_to_output(
+                    jax.numpy.array(value[i], dtype=self.precisionPolicy.compute_dtype)
+                )
+        self._phi_tree = value
+
+    @property
+    def delta_rho_tree(self):
+        return self._delta_rho_tree
+
+    @delta_rho_tree.setter
+    def delta_rho_tree(self, value):
+        if not isinstance(value, list):
+            raise ValueError(
+                "Contact angle adjustment parameter delta_rho must be provided for all components in a list to use improved virtual density scheme"
+            )
+        if len(value) != self.n_components:
+            raise ValueError(
+                "delta_rho must be provided for all components to use improved virtual density scheme"
+            )
+        for i in range(self.n_components):
+            if isinstance(value[i], np.ndarray):
+                value[i] = self.precisionPolicy.cast_to_output(
+                    jax.numpy.array(value[i], dtype=self.precisionPolicy.compute_dtype)
+                )
+        self._delta_rho_tree = value
 
     def get_solid_mask_streamed(self):
         """
@@ -306,6 +374,72 @@ class Multiphase(LBMBase):
         else:
             return feq_tree
 
+    @partial(jit, static_argnums=(0,))
+    def compute_average_density(self, rho_tree):
+        rho_s_tree = map(
+            lambda rho: self.streaming(
+                jnp.repeat(rho, axis=-1, repeats=self.lattice.q)
+            ),
+            rho_tree,
+        )
+        rho_ave_tree = map(
+            lambda rho_s: jnp.sum(
+                self.G_ff * rho_s * self.solid_mask_streamed,
+                axis=-1,
+                keepdims=True,
+            )
+            / jnp.sum(self.G_ff * self.solid_mask_streamed, axis=-1, keepdims=True),
+            rho_s_tree,
+        )
+        return rho_ave_tree
+
+    @partial(jit, static_argnums=(0,))
+    def apply_contact_angle(self, rho_tree):
+        """
+        Apply the prescribed contact angle to density. The control parameters for this scheme are
+        self.theta_tree, self.phi_tree and self.delta_rho_tree. The max and min density fields are identified from initial configuration.
+
+        Parameters:
+        ----------
+        rho_tree: pytree of jax.numpy.ndarray
+            Pytree of density fields
+
+        Returns:
+        -------
+        Pytree of density tree with adjusted contact angle values at the boundary nodes.
+
+        Reference:
+        ---------
+        1. Li, Q., Yu, Y. & Luo, K. H. "Implementation of contact angles in pseudopotential lattice Boltzmann simulations with
+        curved boundaries." Phys. Rev. E 100, 053313 (2019).
+        """
+        rho_ave_tree = self.compute_average_density(rho_tree)
+
+        def set_contact_angle(rho, rho_ave, BC, theta, phi, delta_rho):
+            for bc in BC:
+                if (
+                    isinstance(bc, BounceBackHalfway)
+                    or isinstance(bc, BounceBack)
+                    or isinstance(bc, BounceBackMoving)
+                ):
+                    rho = rho.at[bc.indices].set(
+                        int(theta <= jnp.pi / 2) * (phi * rho_ave[bc.indices])
+                        + int(theta > jnp.pi / 2) * (rho_ave[bc.indices] - delta_rho)
+                    )
+            return rho
+
+        return map(
+            lambda rho, rho_ave, BC, theta, phi, delta_rho: set_contact_angle(
+                rho, rho_ave, BC, theta, phi, delta_rho
+            ),
+            rho_tree,
+            rho_ave_tree,
+            self.BCs,
+            self.theta_tree,
+            self.phi_tree,
+            self.delta_rho_tree,
+        )
+
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
     def collision(self, fin_tree):
         """
@@ -423,13 +557,13 @@ class Multiphase(LBMBase):
             shape = (self.nx, self.ny, self.nz, self.q)
         f_tree = []
         if rho0_tree is not None and u0_tree is not None:
-            assert (
-                len(rho0_tree) == self.n_components
-            ), "The initial density values for all components must be provided"
+            assert len(rho0_tree) == self.n_components, (
+                "The initial density values for all components must be provided"
+            )
 
-            assert (
-                len(u0_tree) == self.n_components
-            ), "The initial velocity values for all components must be provided."
+            assert len(u0_tree) == self.n_components, (
+                "The initial velocity values for all components must be provided."
+            )
 
             for i in range(self.n_components):
                 rho0, u0 = rho0_tree[i], u0_tree[i]
@@ -636,19 +770,18 @@ class Multiphase(LBMBase):
         -------
         Pytree of jax.numpy.ndarray
         """
-        # rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
+        rho_tree = self.apply_contact_angle(rho_tree)
         psi_tree, U_tree = self.compute_potential(rho_tree)
         fluid_fluid_force = self.compute_fluid_fluid_force(psi_tree, U_tree)
-        fluid_solid_force = self.compute_fluid_solid_force(rho_tree)
+        # fluid_solid_force = self.compute_fluid_solid_force(rho_tree)
         if self.force is not None:
             return map(
-                lambda ff, fs, rho: ff + fs + self.force * rho,
+                lambda ff, rho: ff + self.force * rho,
                 fluid_fluid_force,
-                fluid_solid_force,
                 rho_tree,
             )
         else:
-            return map(lambda ff, fs: ff + fs, fluid_fluid_force, fluid_solid_force)
+            return fluid_fluid_force
 
     @partial(jit, static_argnums=(0,))
     def compute_fluid_fluid_force(self, psi_tree, U_tree):
