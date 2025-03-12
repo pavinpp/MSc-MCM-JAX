@@ -1480,7 +1480,7 @@ class MultiphaseMRT(Multiphase):
             )
 
             def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
-                C = jnp.zeros(
+                C = jnp.zeros_like(
                     psi,
                     dtype=self.precisionPolicy.compute_dtype,
                 )
