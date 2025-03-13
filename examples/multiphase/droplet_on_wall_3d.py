@@ -11,28 +11,34 @@ The collision matrix is based on:
 import os
 import numpy as np
 
-from src.lattice import LatticeD2Q9
+from src.lattice import LatticeD3Q19
 from src.multiphase import MultiphaseMRT
 from src.eos import Peng_Robinson
 from src.boundary_conditions import BounceBack
 from src.utils import save_fields_vtk
 
 
-class DropletOnWall2D(MultiphaseMRT):
+class DropletOnWall3D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
-        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2 - 100) ** 2)
+        dist = np.sqrt(
+            (x - self.nx / 2) ** 2
+            + (y - self.ny / 2) ** 2
+            + (z - self.nz / 2 - 100) ** 2
+        )
         rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
             2 * (dist - r) / width
         )
         # rho[ind[:, 0], ind[:, 1]] = 1.0
-        rho = rho.reshape((nx, ny, 1))
+        rho = rho.reshape((nx, ny, nz, 1))
         rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
+            (self.nx, self.ny, self.nz, 1),
+            self.precisionPolicy.compute_dtype,
+            init_val=rho,
         )
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree = [rho]
 
-        u = np.zeros((self.nx, self.ny, 2))
+        u = np.zeros((self.nx, self.ny, self.nz, 3))
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = [u]
         return rho_tree, u_tree
@@ -50,6 +56,7 @@ class DropletOnWall2D(MultiphaseMRT):
             "rho": rho[..., 0],
             "ux": u[..., 0],
             "uy": u[..., 1],
+            "uz": u[..., 2],
             "flag": np.array(self.solid_mask_streamed[..., 0]),
         }
         u_sp = np.sqrt(np.sum(np.square(u), axis=-1))
@@ -68,18 +75,18 @@ if __name__ == "__main__":
     # Initial semi circular droplet specification
     r = 50
     nx = 300
-    ny = 350
+    ny = 300
+    nz = 350
     width = 4
 
-    # Circular wall
+    # Spherical wall
     R = 70
     x = np.linspace(0, nx - 1, nx)
     y = np.linspace(0, ny - 1, ny)
-    x, y = np.meshgrid(x, y)
-    x = x.T
-    y = y.T
-    circ = (x - nx / 2) ** 2 + (y - ny / 2 + 20) ** 2 - R**2
-    ind = np.array(np.where(circ <= 0)).T
+    z = np.linspace(0, nz - 1, nz)
+    x, y, z = np.meshgrid(x, y, z)
+    sphere = (x - nx / 2) ** 2 + (y - ny / 2) ** 2 + (z - nz / 2 + 20) ** 2 - R**2
+    ind = np.array(np.where(sphere <= 0)).T
 
     visc = 0.15
     tau = 3 * visc + 0.5
@@ -96,18 +103,29 @@ if __name__ == "__main__":
 
     g_kkprime = -1 * np.ones((1, 1))
 
-    e = LatticeD2Q9().c.T
+    e = LatticeD3Q19().c.T
     en = np.linalg.norm(e, axis=1)
-    M = np.zeros((9, 9))
+
+    M = np.zeros((19, 19))
     M[0, :] = en**0
-    M[1, :] = -4 * en**0 + 3 * en**2
-    M[2, :] = 4 * en**0 - (21 / 2) * en**2 + (9 / 2) * en**4
+    M[1, :] = 19 * en**2 - 30
+    M[2, :] = (21 * en**4 - 53 * en**2 + 24) / 2
     M[3, :] = e[:, 0]
-    M[4, :] = (-5 * en**0 + 3 * en**2) * e[:, 0]
+    M[4, :] = (5 * en**2 - 9) * e[:, 0]
     M[5, :] = e[:, 1]
-    M[6, :] = (-5 * en**0 + 3 * en**2) * e[:, 1]
-    M[7, :] = e[:, 0] ** 2 - e[:, 1] ** 2
-    M[8, :] = e[:, 0] * e[:, 1]
+    M[6, :] = (5 * en**2 - 9) * e[:, 1]
+    M[7, :] = e[:, 2]
+    M[8, :] = (5 * en**2 - 9) * e[:, 2]
+    M[9, :] = 3 * e[:, 0] ** 2 - en**2
+    M[10, :] = (3 * en**2 - 5) * (3 * e[:, 0] ** 2 - en**2)
+    M[11, :] = e[:, 1] ** 2 - e[:, 2] ** 2
+    M[12, :] = (3 * en**2 - 5) * (e[:, 1] ** 2 - e[:, 2] ** 2)
+    M[13, :] = e[:, 0] * e[:, 1]
+    M[14, :] = e[:, 1] * e[:, 2]
+    M[15, :] = e[:, 0] * e[:, 2]
+    M[16, :] = (e[:, 1] ** 2 - e[:, 2] ** 2) * e[:, 0]
+    M[17, :] = (e[:, 2] ** 2 - e[:, 0] ** 2) * e[:, 1]
+    M[18, :] = (e[:, 0] ** 2 - e[:, 1] ** 2) * e[:, 2]
 
     s_rho = [0.0]  # Mass
     s_e = [1.0]
@@ -115,14 +133,18 @@ if __name__ == "__main__":
     s_j = [0.0]  # Momentum
     s_q = [1.0]
     s_v = [1 / tau]
+    s_m = [1.0]
+    s_pi = [1.0]
+    s_v = [1.0]
+
     kwargs = {
-        "lattice": LatticeD2Q9(precision),
+        "lattice": LatticeD3Q19(precision),
         "omega": [1 / tau],
         "nx": nx,
         "ny": ny,
-        "nz": 0,
+        "nz": nz,
         "n_components": 1,
-        "body_force": [0.0, 0.0],
+        "body_force": [0.0, 0.0, 0.0],
         "g_kkprime": g_kkprime,
         "M": [M],
         "s_rho": s_rho,
@@ -130,10 +152,12 @@ if __name__ == "__main__":
         "s_eta": s_eta,
         "s_j": s_j,
         "s_q": s_q,
-        "s_v": s_v,
-        "theta": [90 * np.pi / 180],  # Contact angle in radians
-        "phi": [1.0],
-        "delta_rho": [0.0],
+        "s_pi": s_pi,
+        "s_m": s_m,
+        "s_v": [1.0],
+        "theta": [170 * np.pi / 180],  # Contact angle in radians
+        "phi": [0.0],
+        "delta_rho": [1.0],
         "EOS": eos,
         "kappa": [0],
         # values not used, can be set as anything
@@ -147,5 +171,5 @@ if __name__ == "__main__":
         "restore_checkpoint": False,
     }
     os.system("rm -rf output*/")
-    sim = DropletOnWall2D(**kwargs)
+    sim = DropletOnWall3D(**kwargs)
     sim.run(20000)
