@@ -155,9 +155,11 @@ if __name__ == "__main__":
         "s_pi": s_pi,
         "s_m": s_m,
         "s_v": [1.0],
-        "theta": [170 * np.pi / 180],  # Contact angle in radians
-        "phi": [0.0],
-        "delta_rho": [1.0],
+        "theta": [
+            170 * np.pi / 180 * np.ones((nx, ny, nz, 1))
+        ],  # Contact angle in radians
+        "phi": [0.0 * np.ones((nx, ny, nz, 1))],
+        "delta_rho": [1.0 * np.ones((nx, ny, nz, 1))],
         "EOS": eos,
         "kappa": [0],
         # values not used, can be set as anything

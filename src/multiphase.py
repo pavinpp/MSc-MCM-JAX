@@ -207,6 +207,10 @@ class Multiphase(LBMBase):
                                 value[i], dtype=self.precisionPolicy.compute_dtype
                             )
                         )
+                    else:
+                        raise ValueError(
+                            "Contact angle must be set as an numpy or jax array with values in radians. Set value as pi/2 everywhere to get neutral_wetting or if domain has no solid points"
+                        )
                 self._theta_tree = value
         else:
             self._theta_tree = value
@@ -224,11 +228,17 @@ class Multiphase(LBMBase):
                         "phi must be provided for all components to use improved virtual density scheme"
                     )
                 for i in range(self.n_components):
-                    if isinstance(value[i], np.ndarray):
+                    if isinstance(value[i], np.ndarray) or isinstance(
+                        value[i], jnp.ndarray
+                    ):
                         value[i] = self.precisionPolicy.cast_to_output(
                             jax.numpy.array(
                                 value[i], dtype=self.precisionPolicy.compute_dtype
                             )
+                        )
+                    else:
+                        raise ValueError(
+                            "Contact angle parameters phi must be set as an numpy or jax array, set value as 1.0 everywhere to get neutral_wetting or if domain has no solid points"
                         )
                 self._phi_tree = value
         else:
@@ -252,6 +262,10 @@ class Multiphase(LBMBase):
                             jax.numpy.array(
                                 value[i], dtype=self.precisionPolicy.compute_dtype
                             )
+                        )
+                    else:
+                        raise ValueError(
+                            "Contact angle parameters delta_rho must be set as an numpy or jax array, set value as 1.0 everywhere to get neutral_wetting or if domain has no solid points"
                         )
                 self._delta_rho_tree = value
         else:
@@ -433,8 +447,10 @@ class Multiphase(LBMBase):
                     or isinstance(bc, BounceBackMoving)
                 ):
                     rho = rho.at[bc.indices].set(
-                        int(theta <= jnp.pi / 2) * (phi * rho_ave[bc.indices])
-                        + int(theta > jnp.pi / 2) * (rho_ave[bc.indices] - delta_rho)
+                        (theta[bc.indices] <= jnp.pi / 2)
+                        * (phi[bc.indices] * rho_ave[bc.indices])
+                        + (theta[bc.indices] > jnp.pi / 2)
+                        * (rho_ave[bc.indices] - delta_rho[bc.indices])
                     )
                     rho = jnp.clip(rho, min=rho_min, max=rho_max)
             return rho
