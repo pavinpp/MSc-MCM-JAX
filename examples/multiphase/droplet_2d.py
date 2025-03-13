@@ -40,7 +40,7 @@ class Droplet2D(MultiphaseMRT):
 
         rho_tree = []
 
-        dist = np.sqrt((x - nx / 2) ** 2 + (y - ny / 2) ** 2)
+        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2)
 
         rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
             2 * (dist - r) / width
@@ -64,9 +64,9 @@ class Droplet2D(MultiphaseMRT):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs["rho_tree"][0][1:-1, 1:-1, :])
-        p = np.array(kwargs["p"][1:-1, 1:-1])
-        u = np.array(kwargs["u_tree"][0][1:-1, 1:-1, :])
+        rho = np.array(kwargs["rho_tree"][0][0, 1:-1, 1:-1, :])
+        p = np.array(kwargs["p"][0, 1:-1, 1:-1])
+        u = np.array(kwargs["u_tree"][0][0, 1:-1, 1:-1, :])
         timestep = kwargs["timestep"]
         fields = {
             "p": p[..., 0],
@@ -143,10 +143,11 @@ if __name__ == "__main__":
         "g_kkprime": -1.0 * np.ones((1, 1)),
         "g_ks": [0.0],
         "EOS": eos,
+        "body_force": [0.0, 0.0],
         "omega": [1.0],
         "k": [0.7],
         "A": 0.2 * np.ones((1, 1)),
-        "M": [M, M],
+        "M": [M],
         "s_rho": s_rho,
         "s_e": s_e,
         "s_eta": s_eta,
