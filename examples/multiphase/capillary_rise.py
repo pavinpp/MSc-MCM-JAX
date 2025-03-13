@@ -111,7 +111,7 @@ class CapillaryRise2D(MultiphaseMRT):
 
 if __name__ == "__main__":
     nx = 200
-    ny = 120
+    ny = 150
 
     channel_width = 8
     channel_height = 60
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     M[8, :] = e[:, 0] * e[:, 1]
 
     s_rho = [0.0]
-    s_e = [1.3]
+    s_e = [0.5]
     s_eta = [1.0]
     s_j = [0.0]
     s_q = [1.0]
@@ -159,7 +159,7 @@ if __name__ == "__main__":
 
     # Define contact angle matrix: I do not want any contact angle at the domain top and bottom, which are defined as walls.
     theta = 30 * (np.pi / 180) * np.ones((nx, ny, 1))
-    theta[:, [0, ny - 1], 0] = 180 * (np.pi / 180)
+    theta[:, [0, ny - 1], 0] = 90 * (np.pi / 180)
     # channel has thickness of 2 lattice units. Outer channel walls are set as neutral wetting to prevent fluid climbing on outside
     outside_left_wall = np.array(
         [[nx // 2 - channel_width // 2 - 1, i + offset] for i in range(channel_height)],
@@ -169,8 +169,8 @@ if __name__ == "__main__":
         [[nx // 2 + channel_width // 2 + 1, i + offset] for i in range(channel_height)],
         dtype=np.int32,
     )
-    theta[outside_left_wall] = 180 * (np.pi / 180)
-    theta[outside_right_wall] = 180 * (np.pi / 180)
+    theta[outside_left_wall] = 90 * (np.pi / 180)
+    theta[outside_right_wall] = 90 * (np.pi / 180)
 
     # Same goes for phi
     phi = 1.4 * np.ones((nx, ny, 1))
