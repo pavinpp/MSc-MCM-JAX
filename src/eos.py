@@ -80,7 +80,7 @@ class EOS:
                 "EOS parameter b must be int, float or a list (for multi-component flows)"
             )
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         pass
 
@@ -106,7 +106,7 @@ class VanderWaal(EOS):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - a * rho**2
         return map(eos, self.a, self.b, self.R, rho_tree)
@@ -133,7 +133,7 @@ class Redlich_Kwong(EOS):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
             a * rho**2
@@ -198,7 +198,7 @@ class Redlich_Kwong_Soave(EOS):
         self.T = T
         self.set_alpha()
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
             a * alpha * rho**2
@@ -266,7 +266,7 @@ class Peng_Robinson(EOS):
         self.T = T
         self.set_alpha()
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
             a * alpha * rho**2
@@ -301,7 +301,7 @@ class Carnahan_Starling(EOS):
     def set_temperature(self, T):
         self.T = T
 
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
         eos = lambda a, R, rho, x: (
