@@ -9,10 +9,10 @@ from src.utils import save_fields_vtk
 
 
 r = 30
-width = 3
-nx = 100
-ny = 100
-nz = 100
+width = 4
+nx = 200
+ny = 200
+nz = 200
 
 a = 9 / 49
 b = 2 / 21
@@ -43,14 +43,18 @@ class Droplet3D(MultiphaseMRT):
 
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
         rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
+            (self.nx, self.ny, self.nz, 1),
+            self.precisionPolicy.compute_dtype,
+            init_val=rho,
         )
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, self.nz, 3))
         u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
+            (self.nx, self.ny, self.nz, 3),
+            self.precisionPolicy.compute_dtype,
+            init_val=u,
         )
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
@@ -59,9 +63,9 @@ class Droplet3D(MultiphaseMRT):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs["rho_tree"][0][1:-1, 1:-1, :])
-        p = np.array(kwargs["p_tree"][0][1:-1, 1:-1])
-        u = np.array(kwargs["u_tree"][0][1:-1, 1:-1, :])
+        rho = np.array(kwargs["rho_tree"][0][0, 1:-1, 1:-1, 1:-1, :])
+        p = np.array(kwargs["p_tree"][0][1:-1, 1:-1, 1:-1, :])
+        u = np.array(kwargs["u_tree"][0][0, 1:-1, 1:-1, 1:-1, :])
         timestep = kwargs["timestep"]
         fields = {
             "p": p[..., 0],
@@ -108,8 +112,8 @@ class Droplet3D(MultiphaseMRT):
 
 if __name__ == "__main__":
     s_rho = [0.0]
-    s_e = [1.57]
-    s_eta = [1.03]
+    s_e = ([1.0],)
+    s_eta = ([1.0],)
     s_j = [0.0]
     s_q = [1.0]
     s_m = [1.0]
@@ -159,8 +163,9 @@ if __name__ == "__main__":
         "g_kkprime": -1.0 * np.ones((1, 1)),
         "g_ks": [0.0],
         "EOS": eos,
-        "k": [0.01],
-        "A": [0.2],
+        "body_force": [0.0, 0.0, 0.0],
+        "k": [0.27],
+        "A": [0.01 * np.ones((1, 1))],
         "s_rho": s_rho,
         "s_e": s_e,
         "s_eta": s_eta,
@@ -171,6 +176,9 @@ if __name__ == "__main__":
         "s_v": [1.0],
         "M": [M],
         "kappa": [0.0],
+        "theta": [(np.pi / 2) * np.ones((nx, ny, nz, 1))],
+        "phi": [np.ones((nx, ny, nz, 1))],
+        "delta_rho": [np.zeros((nx, ny, nz, 1))],
         "precision": precision,
         "io_rate": 10000,
         "compute_MLUPS": False,

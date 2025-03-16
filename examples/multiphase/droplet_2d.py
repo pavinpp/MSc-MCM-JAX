@@ -16,7 +16,7 @@ from src.utils import save_fields_vtk
 from src.multiphase import MultiphaseMRT
 
 
-r = 25
+r = 30
 nx = 200
 ny = 200
 
@@ -64,9 +64,9 @@ class Droplet2D(MultiphaseMRT):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs["rho_tree"][0][0, 1:-1, 1:-1, :])
-        p = np.array(kwargs["p"][0, 1:-1, 1:-1])
-        u = np.array(kwargs["u_tree"][0][0, 1:-1, 1:-1, :])
+        rho = np.array(kwargs["rho_tree"][0][0, :, :, :])
+        p = np.array(kwargs["p"][0, :, :])
+        u = np.array(kwargs["u_tree"][0][0, :, :, :])
         timestep = kwargs["timestep"]
         fields = {
             "p": p[..., 0],
@@ -145,8 +145,8 @@ if __name__ == "__main__":
         "EOS": eos,
         "body_force": [0.0, 0.0],
         "omega": [1.0],
-        "k": [0.7],
-        "A": 0.2 * np.ones((1, 1)),
+        "k": [0.16],
+        "A": -0.032 * np.ones((1, 1)),
         "M": [M],
         "s_rho": s_rho,
         "s_e": s_e,
@@ -154,7 +154,10 @@ if __name__ == "__main__":
         "s_j": s_j,
         "s_q": s_q,
         "s_v": s_v,
-        "kappa": [0.0],
+        "theta": [(np.pi / 2) * np.ones((nx, ny, 1))],
+        "phi": [np.ones((nx, ny, 1))],
+        "delta_rho": [np.zeros((nx, ny, 1))],
+        "kappa": [1.0],
         "precision": precision,
         "io_rate": 10000,
         "compute_MLUPS": False,

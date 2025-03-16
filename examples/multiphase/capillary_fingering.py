@@ -13,24 +13,6 @@ from jax.tree import map, reduce
 import jax.numpy as jnp
 
 
-nx = 500
-ny = 75
-
-tau_2 = 1.9
-v_2 = (tau_2 - 0.5) / 3
-
-visc_ratio = 10.0  # viscosity ratio
-v_1 = v_2 / visc_ratio
-tau_1 = 3 * v_1 + 0.5
-
-rho_2 = 1.0  # Displaced fluid
-rho_1 = 1.0  # Invading fluid
-
-rho_t = rho_1 + rho_2
-
-fraction = 0.97
-
-
 class CapillaryFingering(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
         x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
@@ -89,7 +71,7 @@ class CapillaryFingering(MultiphaseMRT):
             BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
         )
 
-        # apply inlet equilibrium boundary condition at the left
+        # # apply inlet equilibrium boundary condition at the left
         # inlet = self.boundingBoxIndices["left"]
         # yy_inlet = yy.reshape(self.nx, self.ny)[tuple(inlet.T)]
         # rho_inlet = (
@@ -134,7 +116,7 @@ class CapillaryFingering(MultiphaseMRT):
         #         vel_inlet,
         #     )
         # )
-
+        #
         # # Same at the outlet
         # outlet = self.boundingBoxIndices["right"]
         # yy_outlet = yy.reshape(self.nx, self.ny)[tuple(outlet.T)]
@@ -236,6 +218,24 @@ class CapillaryFingering(MultiphaseMRT):
 
 if __name__ == "__main__":
     precision = "f32/f32"
+
+    nx = 500
+    ny = 76
+
+    tau_2 = 1.9
+    v_2 = (tau_2 - 0.5) / 3
+
+    visc_ratio = 10.0  # viscosity ratio
+    v_1 = v_2 / visc_ratio
+    tau_1 = 3 * v_1 + 0.5
+
+    rho_2 = 1.0  # Displaced fluid
+    rho_1 = 1.0  # Invading fluid
+
+    rho_t = rho_1 + rho_2
+
+    fraction = 0.97
+
     g_kkprime = -0.027 * np.ones((2, 2))
     g = 0.57
     g_kkprime[0, 1] = g
@@ -256,12 +256,33 @@ if __name__ == "__main__":
     M[8, :] = e[:, 0] * e[:, 1]
 
     s_rho = [0.0, 0.0]  # Mass
-    s_e = [1.0, 1.0]
+    s_e = [0.4, 0.4]
     s_eta = [1.0, 1.0]
     s_j = [0.0, 0.0]  # Momentum
     s_q = [1.0, 1.0]
     s_v = [1 / tau_1, 1 / tau_2]
-    for fx in [0.8, 1.6, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]:
+
+    # Contact angle of the invading fluid
+    c1 = np.pi / 2
+    c2 = np.pi - c1
+    theta_1 = (np.pi / 2) * np.ones((nx, ny, 1))
+    theta_1[:, [0, ny - 1], 0] = (
+        c1  # The contact angles needs to be set at solid points only
+    )
+    theta_2 = (np.pi / 2) * np.ones((nx, ny, 1))
+    theta_2[:, [0, ny - 1], 0] = (
+        c2  # The contact angles needs to be set for solid points only
+    )
+
+    phi_1 = np.ones((nx, ny, 1))
+    phi_2 = np.ones((nx, ny, 1))
+
+    delta_rho_1 = np.zeros((nx, ny, 1))
+    delta_rho_2 = np.zeros((nx, ny, 1))
+
+    os.system("rm -rf output*/ *.vtk")
+    # for fx in [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]:
+    for fx in [2.8]:
         kwargs = {
             "n_components": 2,
             "lattice": LatticeD2Q9(precision),
@@ -283,16 +304,18 @@ if __name__ == "__main__":
             "kappa": [0.0, 0.0],
             "k": [0, 0],
             "A": np.zeros((2, 2)),
+            "theta": [theta_1, theta_2],
+            "delta_rho": [delta_rho_1, delta_rho_2],
+            "phi": [phi_1, phi_2],
             "io_rate": 10,
             "compute_MLUPS": False,
-            "print_info_rate": 30000,
+            "print_info_rate": 10000,
             "checkpoint_rate": -1,
             "checkpoint_dir": os.path.abspath("./checkpoints_"),
             "restore_checkpoint": False,
         }
-        # os.system("rm -rf output*/ *.vtk")
         try:
             sim = CapillaryFingering(**kwargs)
-            sim.run(30000)
+            sim.run(10000)
         except FloatingPointError as _:  # Larger forces can lead to instability
             continue
