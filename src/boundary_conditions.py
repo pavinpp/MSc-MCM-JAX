@@ -2,6 +2,8 @@ import jax.numpy as jnp
 from jax import jit, device_count
 from functools import partial
 import numpy as np
+
+
 class BoundaryCondition(object):
     """
     Base class for boundary conditions in a LBM simulation.
@@ -53,7 +55,6 @@ class BoundaryCondition(object):
         self.implementationStep = "PostStreaming"
 
     def create_local_mask_and_normal_arrays(self, grid_mask):
-
         """
         Creates local mask and normal arrays for the boundary condition.
 
@@ -80,11 +81,13 @@ class BoundaryCondition(object):
         boundaryMask = self.get_boundary_mask(grid_mask)
         self.normals = self.get_normals(boundaryMask)
         self.imissing, self.iknown = self.get_missing_indices(boundaryMask)
-        self.imissingMask, self.iknownMask, self.imiddleMask = self.get_missing_mask(boundaryMask)
+        self.imissingMask, self.iknownMask, self.imiddleMask = self.get_missing_mask(
+            boundaryMask
+        )
 
         return
 
-    def get_boundary_mask(self, grid_mask):  
+    def get_boundary_mask(self, grid_mask):
         """
         Add jax.device_count() to the self.indices in x-direction, and 1 to the self.indices other directions
         This is to make sure the boundary condition is applied to the correct nodes as grid_mask is
@@ -94,11 +97,11 @@ class BoundaryCondition(object):
         ----------
         grid_mask : array-like
             The grid mask for the lattice.
-        
+
         Returns
         -------
         boundaryMask : array-like
-        """   
+        """
         shifted_indices = np.array(self.indices)
         shifted_indices[0] += device_count()
         shifted_indices[1:] += 1
@@ -149,7 +152,7 @@ class BoundaryCondition(object):
         Notes
         -----
         This method should be overridden in subclasses if the boundary condition requires preparation of the distribution functions during post-collision or post-streaming. See ExtrapolationBoundaryCondition for an example.
-        """   
+        """
         return fout
 
     def get_normals(self, boundaryMask):
@@ -199,7 +202,7 @@ class BoundaryCondition(object):
         # Find imissing, iknown 1-to-1 corresponding indices
         # Note: the "zero" index is used as default value here and won't affect BC computations
         nbd = len(self.indices[0])
-        imissing = np.vstack([np.arange(self.lattice.q, dtype='uint8')] * nbd)
+        imissing = np.vstack([np.arange(self.lattice.q, dtype="uint8")] * nbd)
         iknown = np.vstack([self.lattice.opp_indices] * nbd)
         imissing[~boundaryMask] = 0
         iknown[~boundaryMask] = 0
@@ -336,17 +339,20 @@ class BoundaryCondition(object):
 
         Notes
         -----
-        This method computes the force exerted on the solid geometry at each boundary node using the momentum exchange method. 
+        This method computes the force exerted on the solid geometry at each boundary node using the momentum exchange method.
         The force is computed based on the post-streaming and post-collision distribution functions. This method
         should be called after the boundary conditions are imposed.
         """
         c = jnp.array(self.lattice.c, dtype=self.precisionPolicy.compute_dtype)
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
-        phi = f_postcollision[self.indices][bindex, self.iknown] + \
-              f_poststreaming[self.indices][bindex, self.imissing]
+        phi = (
+            f_postcollision[self.indices][bindex, self.iknown]
+            + f_poststreaming[self.indices][bindex, self.imissing]
+        )
         force = jnp.sum(c[:, self.iknown] * phi, axis=-1).T
         return force
+
 
 class BounceBack(BoundaryCondition):
     """
@@ -362,11 +368,23 @@ class BounceBack(BoundaryCondition):
     implementationStep : str
         The step in the lattice Boltzmann method algorithm at which the boundary condition is applied. For this class,
         it is "PostCollision".
+    theta: jax.numpy.ndarray; Default: None
+        Contact angle, applied for multiphase flows and only set for wall boundary conditions.
+    phi: jax.numpy.ndarray; Default: None
+        Contact angle parameter phi, applied for multiphase flows and only set for wall boundary conditions.
+    delta_rho: pytree of jax.numpy.ndarray; Default: None
+        Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
-    def __init__(self, indices, gridInfo, precision_policy):
+
+    def __init__(
+        self, indices, gridInfo, precision_policy, theta=None, phi=None, delta_rho=None
+    ):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "BounceBackFullway"
         self.implementationStep = "PostCollision"
+        self.theta = theta
+        self.phi = phi
+        self.delta_rho = delta_rho
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, fin):
@@ -393,6 +411,7 @@ class BounceBack(BoundaryCondition):
 
         return fin[self.indices][..., self.lattice.opp_indices]
 
+
 class BounceBackMoving(BoundaryCondition):
     """
     Moving bounce-back boundary condition for a lattice Boltzmann method simulation.
@@ -413,9 +432,23 @@ class BounceBackMoving(BoundaryCondition):
     update_function : function
         A function that updates the boundary condition. For this class, it is a function that updates the boundary
         condition based on the current time step. The signature of the function is `update_function(time) -> (indices, vel)`,
-
+    theta: jax.numpy.ndarray; Default: None
+        Contact angle, applied for multiphase flows and only set for wall boundary conditions.
+    phi: jax.numpy.ndarray; Default: None
+        Contact angle parameter phi, applied for multiphase flows and only set for wall boundary conditions.
+    delta_rho: pytree of jax.numpy.ndarray; Default: None
+        Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
-    def __init__(self, gridInfo, precision_policy, update_function=None):
+
+    def __init__(
+        self,
+        gridInfo,
+        precision_policy,
+        update_function=None,
+        theta=None,
+        phi=None,
+        delta_rho=None,
+    ):
         # We get the indices at time zero to pass to the parent class for initialization
         indices, _ = update_function(0)
         super().__init__(indices, gridInfo, precision_policy)
@@ -423,6 +456,9 @@ class BounceBackMoving(BoundaryCondition):
         self.implementationStep = "PostCollision"
         self.isDynamic = True
         self.update_function = jit(update_function)
+        self.theta = theta
+        self.phi = phi
+        self.delta_rho = delta_rho
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, fin, time):
@@ -469,14 +505,33 @@ class BounceBackHalfway(BoundaryCondition):
         Whether the boundary condition represents a solid boundary. For this class, it is True.
     vel : array-like
         The prescribed value of velocity vector for the boundary condition. No-slip BC is assumed if vel=None (default).
+    theta: jax.numpy.ndarray; Default: None
+        Contact angle, applied for multiphase flows and only set for wall boundary conditions.
+    phi: jax.numpy.ndarray; Default: None
+        Contact angle parameter phi, applied for multiphase flows and only set for wall boundary conditions.
+    delta_rho: pytree of jax.numpy.ndarray; Default: None
+        Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
-    def __init__(self, indices, gridInfo, precision_policy, vel=None):
+
+    def __init__(
+        self,
+        indices,
+        gridInfo,
+        precision_policy,
+        vel=None,
+        theta=None,
+        phi=None,
+        delta_rho=None,
+    ):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "BounceBackHalfway"
         self.implementationStep = "PostStreaming"
         self.needsExtraConfiguration = True
         self.isSolid = True
         self.vel = vel
+        self.theta = theta
+        self.phi = phi
+        self.delta_rho = delta_rho
 
     def configure(self, boundaryMask):
         """
@@ -508,8 +563,13 @@ class BounceBackHalfway(BoundaryCondition):
         nbd_modified = len(self.indices[0])
         if (nbd_orig != nbd_modified) and self.vel is not None:
             vel_avg = np.mean(self.vel, axis=0)
-            self.vel = jnp.zeros(indices_new.shape, dtype=self.precisionPolicy.compute_dtype) + vel_avg
-            print("WARNING: assuming a constant averaged velocity vector is imposed at all BC cells!")
+            self.vel = (
+                jnp.zeros(indices_new.shape, dtype=self.precisionPolicy.compute_dtype)
+                + vel_avg
+            )
+            print(
+                "WARNING: assuming a constant averaged velocity vector is imposed at all BC cells!"
+            )
 
         return
 
@@ -545,7 +605,8 @@ class BounceBackHalfway(BoundaryCondition):
         if self.vel is not None:
             fbd = self.impose_boundary_vel(fbd, bindex)
         return fbd
-    
+
+
 class EquilibriumBC(BoundaryCondition):
     """
     Equilibrium boundary condition for a lattice Boltzmann method simulation.
@@ -594,6 +655,7 @@ class EquilibriumBC(BoundaryCondition):
         """
         return self.out
 
+
 class DoNothing(BoundaryCondition):
     def __init__(self, indices, gridInfo, precision_policy):
         """
@@ -624,7 +686,6 @@ class DoNothing(BoundaryCondition):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "DoNothing"
         self.implementationStep = "PostStreaming"
-
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, fin):
@@ -677,6 +738,7 @@ class ZouHe(BoundaryCondition):
     Zou, Q., & He, X. (1997). On pressure and velocity boundary conditions for the lattice Boltzmann BGK model.
     Physics of Fluids, 9(6), 1591-1598. doi:10.1063/1.869307
     """
+
     def __init__(self, indices, gridInfo, precision_policy, type, prescribed):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "ZouHe"
@@ -702,8 +764,10 @@ class ZouHe(BoundaryCondition):
         """
         Calculate velocity based on the prescribed pressure/density (Zou/He BC)
         """
-        unormal = -1. + 1. / rho * (jnp.sum(fpop[self.indices] * self.imiddleMask, axis=1, keepdims=True) +
-                               2. * jnp.sum(fpop[self.indices] * self.iknownMask, axis=1, keepdims=True))
+        unormal = -1.0 + 1.0 / rho * (
+            jnp.sum(fpop[self.indices] * self.imiddleMask, axis=1, keepdims=True)
+            + 2.0 * jnp.sum(fpop[self.indices] * self.iknownMask, axis=1, keepdims=True)
+        )
 
         # Return the above unormal as a normal vector which sets the tangential velocities to zero
         vel = unormal * self.normals
@@ -714,10 +778,12 @@ class ZouHe(BoundaryCondition):
         """
         Calculate density based on the prescribed velocity (Zou/He BC)
         """
-        unormal = np.sum(self.normals*vel, axis=1)
+        unormal = np.sum(self.normals * vel, axis=1)
 
-        rho = (1.0/(1.0 + unormal))[..., None] * (jnp.sum(fpop[self.indices] * self.imiddleMask, axis=1, keepdims=True) +
-                                  2.*jnp.sum(fpop[self.indices] * self.iknownMask, axis=1, keepdims=True))
+        rho = (1.0 / (1.0 + unormal))[..., None] * (
+            jnp.sum(fpop[self.indices] * self.imiddleMask, axis=1, keepdims=True)
+            + 2.0 * jnp.sum(fpop[self.indices] * self.iknownMask, axis=1, keepdims=True)
+        )
         return rho
 
     @partial(jit, static_argnums=(0,), inline=True)
@@ -725,14 +791,16 @@ class ZouHe(BoundaryCondition):
         """
         This is the ZouHe method of calculating the missing macroscopic variables at the boundary.
         """
-        if self.type == 'velocity':
+        if self.type == "velocity":
             vel = self.prescribed
             rho = self.calculate_rho(fpop, vel)
-        elif self.type == 'pressure':
+        elif self.type == "pressure":
             rho = self.prescribed
             vel = self.calculate_vel(fpop, rho)
         else:
-            raise ValueError(f"type = {self.type} not supported! Use \'pressure\' or \'velocity\'.")
+            raise ValueError(
+                f"type = {self.type} not supported! Use 'pressure' or 'velocity'."
+            )
 
         # compute feq at the boundary
         feq = self.equilibrium(rho, vel)
@@ -747,7 +815,11 @@ class ZouHe(BoundaryCondition):
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
         fbd = fpop[self.indices]
-        fknown = fpop[self.indices][bindex, self.iknown] + feq[bindex, self.imissing] - feq[bindex, self.iknown]
+        fknown = (
+            fpop[self.indices][bindex, self.iknown]
+            + feq[bindex, self.imissing]
+            - feq[bindex, self.iknown]
+        )
         fbd = fbd.at[bindex, self.imissing].set(fknown)
         return fbd
 
@@ -772,7 +844,7 @@ class ZouHe(BoundaryCondition):
         -----
         This method applies the Zou-He boundary condition by first computing the equilibrium distribution functions based
         on the prescribed values and the type of boundary condition, and then setting the unknown distribution functions
-        based on the non-equilibrium bounce-back method. 
+        based on the non-equilibrium bounce-back method.
         Tangential velocity is not ensured to be zero by adding transverse contributions based on
         Hecth & Harting (2010) (doi:10.1088/1742-5468/2010/01/P01018) as it caused numerical instabilities at higher
         Reynolds numbers. One needs to use "Regularized" BC at higher Reynolds.
@@ -783,8 +855,8 @@ class ZouHe(BoundaryCondition):
         # set the unknown f populations based on the non-equilibrium bounce-back method
         fbd = self.bounceback_nonequilibrium(fout, feq)
 
-
         return fbd
+
 
 class Regularized(ZouHe):
     """
@@ -811,7 +883,7 @@ class Regularized(ZouHe):
     def __init__(self, indices, gridInfo, precision_policy, type, prescribed):
         super().__init__(indices, gridInfo, precision_policy, type, prescribed)
         self.name = "Regularized"
-        #TODO for Hesam: check to understand why corner cases cause instability here.
+        # TODO for Hesam: check to understand why corner cases cause instability here.
         # self.needsExtraConfiguration = False
         self.construct_symmetric_lattice_moment()
 
@@ -833,7 +905,7 @@ class Regularized(ZouHe):
             raise ValueError(f"dim = {self.dim} not supported")
 
         # Qi = cc - cs^2*I
-        Qi = Qi.at[:, diagonal].set(self.lattice.cc[:, diagonal] - 1./3.)
+        Qi = Qi.at[:, diagonal].set(self.lattice.cc[:, diagonal] - 1.0 / 3.0)
 
         # multiply off-diagonal elements by 2 because the Q tensor is symmetric
         Qi = Qi.at[:, offdiagonal].set(self.lattice.cc[:, offdiagonal] * 2.0)
@@ -872,7 +944,7 @@ class Regularized(ZouHe):
 
         # assign all populations based on eq 45 of Latt et al (2008)
         # fneq ~ f^1
-        fpop1 = 9. / 2. * self.lattice.w[None, :] * QiPi1
+        fpop1 = 9.0 / 2.0 * self.lattice.w[None, :] * QiPi1
         fpop_regularized = feq + fpop1
 
         return fpop_regularized
@@ -937,7 +1009,7 @@ class ExtrapolationOutflow(BoundaryCondition):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "ExtrapolationOutflow"
         self.needsExtraConfiguration = True
-        self.sound_speed = 1./jnp.sqrt(3.)
+        self.sound_speed = 1.0 / jnp.sqrt(3.0)
 
     def configure(self, boundaryMask):
         """
@@ -947,7 +1019,7 @@ class ExtrapolationOutflow(BoundaryCondition):
         ----------
         boundaryMask : np.ndarray
             The grid mask for the boundary voxels.
-        """        
+        """
         hasFluidNeighbour = ~boundaryMask[:, self.lattice.opp_indices]
         idx = np.array(self.indices).T
         idx_trg = []
@@ -983,7 +1055,7 @@ class ExtrapolationOutflow(BoundaryCondition):
         """
         f_postcollision = fout
         f_poststreaming = fin
-        if implementation_step == 'PostStreaming':
+        if implementation_step == "PostStreaming":
             return f_postcollision
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
@@ -992,7 +1064,9 @@ class ExtrapolationOutflow(BoundaryCondition):
         fpc_bdr = f_postcollision[self.indices]
         fpop = fps_bdr[bindex, self.imissing]
         fpop_neighbour = fps_nbr[bindex, self.imissing]
-        fpop_extrapolated = self.sound_speed * fpop_neighbour + (1. - self.sound_speed) * fpop
+        fpop_extrapolated = (
+            self.sound_speed * fpop_neighbour + (1.0 - self.sound_speed) * fpop
+        )
 
         # Use the iknown directions of f_postcollision that leave the domain during streaming to store the BC data
         fpc_bdr = fpc_bdr.at[bindex, self.iknown].set(fpop_extrapolated)
@@ -1039,12 +1113,13 @@ class InterpolatedBounceBackBouzidi(BounceBackHalfway):
         An array of shape (nx,ny,nz) indicating the signed-distance field from the solid walls
     weights : array-like
         An array of shape (number_of_bc_cells, q) initialized as None and constructed using implicit_distances array
-        during runtime. These "weights" are associated with the fractional distance of fluid cell to the boundary 
+        during runtime. These "weights" are associated with the fractional distance of fluid cell to the boundary
         position defined as: weights(dir_i) = |x_fluid - x_boundary(dir_i)| / |x_fluid - x_solid(dir_i)|.
     """
 
-    def __init__(self, indices, implicit_distances, grid_info, precision_policy, vel=None):
-
+    def __init__(
+        self, indices, implicit_distances, grid_info, precision_policy, vel=None
+    ):
         super().__init__(indices, grid_info, precision_policy, vel=vel)
         self.name = "InterpolatedBounceBackBouzidi"
         self.implicit_distances = implicit_distances
@@ -1100,12 +1175,18 @@ class InterpolatedBounceBackBouzidi(BounceBackHalfway):
         f_poststreaming_iknown = fout[self.indices][bindex, self.iknown]
 
         # if weights<0.5
-        fs_near = 2. * self.weights * f_postcollision_iknown + \
-                  (1.0 - 2.0 * self.weights) * f_poststreaming_iknown
+        fs_near = (
+            2.0 * self.weights * f_postcollision_iknown
+            + (1.0 - 2.0 * self.weights) * f_poststreaming_iknown
+        )
 
         # if weights>=0.5
-        fs_far = 1.0 / (2. * self.weights) * f_postcollision_iknown + \
-                 (2.0 * self.weights - 1.0) / (2. * self.weights) * f_postcollision_imissing
+        fs_far = (
+            1.0 / (2.0 * self.weights) * f_postcollision_iknown
+            + (2.0 * self.weights - 1.0)
+            / (2.0 * self.weights)
+            * f_postcollision_imissing
+        )
 
         # combine near and far contributions
         fmissing = jnp.where(self.weights < 0.5, fs_near, fs_far)
@@ -1138,11 +1219,13 @@ class InterpolatedBounceBackDifferentiable(InterpolatedBounceBackBouzidi):
         The name of the boundary condition. For this class, it is "InterpolatedBounceBackDifferentiable".
     """
 
-    def __init__(self, indices, implicit_distances, grid_info, precision_policy, vel=None):
-
-        super().__init__(indices, implicit_distances, grid_info, precision_policy, vel=vel)
+    def __init__(
+        self, indices, implicit_distances, grid_info, precision_policy, vel=None
+    ):
+        super().__init__(
+            indices, implicit_distances, grid_info, precision_policy, vel=vel
+        )
         self.name = "InterpolatedBounceBackDifferentiable"
-
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, fin):
@@ -1169,10 +1252,13 @@ class InterpolatedBounceBackDifferentiable(InterpolatedBounceBackBouzidi):
         f_postcollision_iknown = fin[self.indices][bindex, self.iknown]
         f_postcollision_imissing = fin[self.indices][bindex, self.imissing]
         f_poststreaming_iknown = fout[self.indices][bindex, self.iknown]
-        fmissing = ((1. - self.weights) * f_poststreaming_iknown +
-                    self.weights * (f_postcollision_imissing + f_postcollision_iknown)) / (1.0 + self.weights)
+        fmissing = (
+            (1.0 - self.weights) * f_poststreaming_iknown
+            + self.weights * (f_postcollision_imissing + f_postcollision_iknown)
+        ) / (1.0 + self.weights)
         fbd = fbd.at[bindex, self.imissing].set(fmissing)
 
         if self.vel is not None:
             fbd = self.impose_boundary_vel(fbd, bindex)
         return fbd
+

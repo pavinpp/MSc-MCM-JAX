@@ -65,10 +65,24 @@ class CapillaryFingering(MultiphaseMRT):
         )
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
-            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                tuple(walls.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                theta_1[tuple(walls.T)],
+                phi_1[tuple(walls.T)],
+                delta_rho_1[tuple(walls.T)],
+            )
         )
         self.BCs[1].append(
-            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                tuple(walls.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                theta_2[tuple(walls.T)],
+                phi_2[tuple(walls.T)],
+                delta_rho_2[tuple(walls.T)],
+            )
         )
 
         # # apply inlet equilibrium boundary condition at the left
@@ -304,9 +318,6 @@ if __name__ == "__main__":
             "kappa": [0.0, 0.0],
             "k": [0, 0],
             "A": np.zeros((2, 2)),
-            "theta": [theta_1, theta_2],
-            "delta_rho": [delta_rho_1, delta_rho_2],
-            "phi": [phi_1, phi_2],
             "io_rate": 10,
             "compute_MLUPS": False,
             "print_info_rate": 10000,

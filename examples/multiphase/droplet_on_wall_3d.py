@@ -45,7 +45,14 @@ class DropletOnWall3D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         self.BCs[0].append(
-            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                ind,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta[ind],
+                phi[theta],
+                delta_rho[theta],
+            )
         )
 
     def output_data(self, **kwargs):
@@ -86,7 +93,8 @@ if __name__ == "__main__":
     z = np.linspace(0, nz - 1, nz)
     x, y, z = np.meshgrid(x, y, z)
     sphere = (x - nx / 2) ** 2 + (y - ny / 2) ** 2 + (z - nz / 2 + 20) ** 2 - R**2
-    ind = np.array(np.where(sphere <= 0)).T
+    ind = np.array(np.where(sphere <= 0))
+    ind = tuple(ind)
 
     visc = 0.15
     tau = 3 * visc + 0.5
@@ -137,6 +145,10 @@ if __name__ == "__main__":
     s_pi = [1.0]
     s_v = [1.0]
 
+    theta = 170 * np.pi / 180 * np.ones((nx, ny, nz, 1))
+    phi = 0.0 * np.ones((nx, ny, nz, 1))
+    delta_rho = 1.0 * np.ones((nx, ny, nz, 1))
+
     kwargs = {
         "lattice": LatticeD3Q19(precision),
         "omega": [1 / tau],
@@ -155,11 +167,6 @@ if __name__ == "__main__":
         "s_pi": s_pi,
         "s_m": s_m,
         "s_v": [1.0],
-        "theta": [
-            170 * np.pi / 180 * np.ones((nx, ny, nz, 1))
-        ],  # Contact angle in radians
-        "phi": [0.0 * np.ones((nx, ny, nz, 1))],
-        "delta_rho": [1.0 * np.ones((nx, ny, nz, 1))],
         "EOS": eos,
         "kappa": [0],
         # values not used, can be set as anything

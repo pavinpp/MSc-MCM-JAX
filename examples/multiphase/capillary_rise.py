@@ -1,3 +1,11 @@
+"""
+Single component 2D capillary rise example where a channel is initially submerged in liquid. The density of each region is computed using Maxwell's Construction. The density profile
+is initialized with smooth profile with specified interface width. Boundary conditions are periodic everywhere. Useful for tuning the various coefficients.
+
+The collision matrix is based on:
+1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+"""
+
 import os
 
 import numpy as np
@@ -75,8 +83,16 @@ class CapillaryRise2D(MultiphaseMRT):
                 self.boundingBoxIndices["bottom"],
             )
         )
+        walls = tuple(walls.T)
         self.BCs[0].append(
-            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                walls,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta[walls],
+                phi[walls],
+                delta_rho[walls],
+            )
         )
 
     def get_force(self):
@@ -201,9 +217,6 @@ if __name__ == "__main__":
         "s_q": s_q,
         "s_v": [1.0],
         "M": [M],
-        "theta": [theta],
-        "phi": [phi],
-        "delta_rho": [delta_rho],
         "kappa": [0.0],
         "precision": precision,
         "io_rate": 100,

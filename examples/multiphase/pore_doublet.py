@@ -17,57 +17,6 @@ from jax import jit, vmap
 from jax.tree import map, reduce
 import jax.numpy as jnp
 
-nx = 200
-ny = 90
-
-tau_2 = 1.9
-v_2 = (tau_2 - 0.5) / 3
-
-visc_ratio = 10.0  # viscosity ratio
-v_1 = v_2 / visc_ratio
-tau_1 = 3 * v_1 + 0.5
-
-rho_2 = 1.0  # Displaced fluid
-rho_1 = 1.0  # Invading fluid
-
-rho_t = rho_1 + rho_2
-
-fraction = 0.97
-
-# Channel dimensions
-width = 12  # Width of the inlet and outlet channel
-
-inlet = np.array(
-    [[0, y] for y in np.arange(ny // 2 - width / 2, ny // 2 + width // 2)], dtype=int
-)
-
-outlet = np.array(
-    [[nx - 1, y] for y in np.arange(ny // 2 - width / 2, ny // 2 + width // 2)],
-    dtype=int,
-)
-
-# Elliptical dimensions
-a = 45  # Major axis length for the obstacle
-b = 25  # Minor axis length for the obstacle
-offset = 4  # Offset for obstacle to define different channels with different widths
-
-x = np.linspace(0, nx - 1, nx, dtype=int)
-y = np.linspace(0, ny - 1, ny, dtype=int)
-x, y = np.meshgrid(x, y)
-x = x.T
-y = y.T
-obstacle = ((x - nx // 2) / a) ** 2 + (((y - ny // 2) - offset) / b) ** 2 - 1
-elliptical_channel = (
-    ((x - nx // 2) / (a + width)) ** 2 + ((y - ny // 2) / (b + width)) ** 2 - 1
-)
-
-mask = np.ones((nx, ny), dtype=int)
-mask[:, ny // 2 - width : ny // 2 + width // 2 + 1] = 0
-mask[elliptical_channel <= 0] = 0
-mask[obstacle <= 0] = 1
-
-walls = np.where(mask == 1)
-
 
 class PoreDoublet(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
@@ -107,8 +56,26 @@ class PoreDoublet(MultiphaseMRT):
         )
 
         # apply bounce back boundary condition to the walls
-        self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy))
-        self.BCs[1].append(BounceBack(walls, self.gridInfo, self.precisionPolicy))
+        self.BCs[0].append(
+            BounceBack(
+                walls,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta_i[walls],
+                phi_i[walls],
+                delta_rho_i[walls],
+            )
+        )
+        self.BCs[1].append(
+            BounceBack(
+                walls,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta_d[walls],
+                phi_d[walls],
+                delta_rho_d[walls],
+            )
+        )
 
         # apply inlet equilibrium boundary condition at the left
         yy_inlet = yy.reshape(self.nx, self.ny)[tuple(inlet.T)]
@@ -255,6 +222,57 @@ class PoreDoublet(MultiphaseMRT):
 
 if __name__ == "__main__":
     precision = "f32/f32"
+    nx = 200
+    ny = 90
+
+    tau_2 = 1.9
+    v_2 = (tau_2 - 0.5) / 3
+
+    visc_ratio = 10.0  # viscosity ratio
+    v_1 = v_2 / visc_ratio
+    tau_1 = 3 * v_1 + 0.5
+
+    rho_2 = 1.0  # Displaced fluid
+    rho_1 = 1.0  # Invading fluid
+
+    rho_t = rho_1 + rho_2
+
+    fraction = 0.97
+
+    # Channel dimensions
+    width = 12  # Width of the inlet and outlet channel
+
+    inlet = np.array(
+        [[0, y] for y in np.arange(ny // 2 - width / 2, ny // 2 + width // 2)],
+        dtype=int,
+    )
+
+    outlet = np.array(
+        [[nx - 1, y] for y in np.arange(ny // 2 - width / 2, ny // 2 + width // 2)],
+        dtype=int,
+    )
+
+    # Elliptical dimensions
+    a = 45  # Major axis length for the obstacle
+    b = 25  # Minor axis length for the obstacle
+    offset = 4  # Offset for obstacle to define different channels with different widths
+
+    x = np.linspace(0, nx - 1, nx, dtype=int)
+    y = np.linspace(0, ny - 1, ny, dtype=int)
+    x, y = np.meshgrid(x, y)
+    x = x.T
+    y = y.T
+    obstacle = ((x - nx // 2) / a) ** 2 + (((y - ny // 2) - offset) / b) ** 2 - 1
+    elliptical_channel = (
+        ((x - nx // 2) / (a + width)) ** 2 + ((y - ny // 2) / (b + width)) ** 2 - 1
+    )
+
+    mask = np.ones((nx, ny), dtype=int)
+    mask[:, ny // 2 - width : ny // 2 + width // 2 + 1] = 0
+    mask[elliptical_channel <= 0] = 0
+    mask[obstacle <= 0] = 1
+
+    walls = np.where(mask == 1)
     prescribed_vel = 0.05
     g_kkprime = -0.027 * np.ones((2, 2))
     g = 0.57
@@ -281,6 +299,15 @@ if __name__ == "__main__":
     s_j = [0.0, 0.0]  # Momentum
     s_q = [1.0, 1.0]
     s_v = [1 / tau_1, 1 / tau_2]
+
+    # Store contact angle, only the values at solid nodes are important and are stored during boundary condition definition
+    theta_d = 0.5 * np.pi * np.ones((nx, ny, 1))
+    theta_i = (np.pi / 6) * np.ones((nx, ny, 1))
+    phi_d = 1.4 * np.ones((nx, ny, 1))
+    phi_i = 1.0 * np.ones((nx, ny, 1))
+    delta_rho_d = np.zeros((nx, ny, 1))
+    delta_rho_i = np.zeros((nx, ny, 1))
+
     kwargs = {
         "n_components": 2,
         "lattice": LatticeD2Q9(precision),
@@ -299,7 +326,7 @@ if __name__ == "__main__":
         "s_j": s_j,
         "s_q": s_q,
         "s_v": s_v,
-        "kappa": [0.1, 0.0],
+        "kappa": [0.0, 0.0],
         "k": [0, 0],
         "A": np.zeros((2, 2)),
         "io_rate": 100,

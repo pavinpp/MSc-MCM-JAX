@@ -66,11 +66,6 @@ class Multiphase(LBMBase):
         # self.g_ks = kwargs.get("g_ks")  # Fluid-solid interaction strength
         self.body_force = kwargs.get("body_force", None)
 
-        # set contact angle using improved virtual density scheme
-        self.theta_tree = kwargs.get("theta", None)
-        self.phi_tree = kwargs.get("phi", None)
-        self.delta_rho_tree = kwargs.get("delta_rho", None)
-
         self.G_ff = self.compute_ff_greens_function()
         self.G_fs = self.compute_fs_greens_function()
 
@@ -188,89 +183,6 @@ class Multiphase(LBMBase):
     #         )
     #     self._g_ks = value
 
-    @property
-    def theta_tree(self):
-        return self._theta_tree
-
-    @theta_tree.setter
-    def theta_tree(self, value):
-        if value is not None:
-            if isinstance(value, list):
-                if len(value) != self.n_components:
-                    raise ValueError(
-                        "Contact angle must be provided for all components to use improved virtual density scheme"
-                    )
-                for i in range(self.n_components):
-                    if isinstance(value[i], np.ndarray):
-                        value[i] = self.precisionPolicy.cast_to_output(
-                            jax.numpy.array(
-                                value[i], dtype=self.precisionPolicy.compute_dtype
-                            )
-                        )
-                    else:
-                        raise ValueError(
-                            "Contact angle must be set as an numpy or jax array with values in radians. Set value as pi/2 everywhere to get neutral_wetting or if domain has no solid points"
-                        )
-                self._theta_tree = value
-        else:
-            self._theta_tree = value
-
-    @property
-    def phi_tree(self):
-        return self._phi_tree
-
-    @phi_tree.setter
-    def phi_tree(self, value):
-        if value is not None:
-            if isinstance(value, list):
-                if len(value) != self.n_components:
-                    raise ValueError(
-                        "phi must be provided for all components to use improved virtual density scheme"
-                    )
-                for i in range(self.n_components):
-                    if isinstance(value[i], np.ndarray) or isinstance(
-                        value[i], jnp.ndarray
-                    ):
-                        value[i] = self.precisionPolicy.cast_to_output(
-                            jax.numpy.array(
-                                value[i], dtype=self.precisionPolicy.compute_dtype
-                            )
-                        )
-                    else:
-                        raise ValueError(
-                            "Contact angle parameters phi must be set as an numpy or jax array, set value as 1.0 everywhere to get neutral_wetting or if domain has no solid points"
-                        )
-                self._phi_tree = value
-        else:
-            self._phi_tree = value
-
-    @property
-    def delta_rho_tree(self):
-        return self._delta_rho_tree
-
-    @delta_rho_tree.setter
-    def delta_rho_tree(self, value):
-        if value is not None:
-            if isinstance(value, list):
-                if len(value) != self.n_components:
-                    raise ValueError(
-                        "delta_rho must be provided for all components to use improved virtual density scheme"
-                    )
-                for i in range(self.n_components):
-                    if isinstance(value[i], np.ndarray):
-                        value[i] = self.precisionPolicy.cast_to_output(
-                            jax.numpy.array(
-                                value[i], dtype=self.precisionPolicy.compute_dtype
-                            )
-                        )
-                    else:
-                        raise ValueError(
-                            "Contact angle parameters delta_rho must be set as an numpy or jax array, set value as 1.0 everywhere to get neutral_wetting or if domain has no solid points"
-                        )
-                self._delta_rho_tree = value
-        else:
-            self._delta_rho_tree = value
-
     def get_solid_mask_streamed(self):
         """
         Define the solid mask used for fluid-solid interaction force. Currently the same solid mask is used by all components.
@@ -284,7 +196,41 @@ class Multiphase(LBMBase):
         -------
         numpy.ndarray: solid_mask array. Dimension: (nx, ny, 1) for d == 2 and (nx, ny, nz, 1) for d == 3
         """
-        solid_indices = []
+        # solid_indices = []
+        # for i in range(self.n_components):
+        #     for bc in self.BCs[i]:
+        #         if (
+        #             isinstance(bc, BounceBack)
+        #             or isinstance(bc, BounceBackHalfway)
+        #             or isinstance(bc, BounceBackMoving)
+        #         ):
+        #             solid_indices.append(np.array(bc.indices).T)
+        # solid_index = None
+        # if not len(solid_indices) == 0:
+        #     solid_index = np.vstack(solid_indices)
+        # if self.dim == 2:
+        #     shape = (self.nx, self.ny, 1)
+        #     solid_mask = jnp.zeros(shape, dtype=jnp.int8)
+        #     if solid_index is not None:
+        #         solid_mask = solid_mask.at[solid_index[:, 0], solid_index[:, 1], 0].set(
+        #             1
+        #         )
+        # else:
+        #     shape = (self.nx, self.ny, self.nz, 1)
+        #     solid_mask = jnp.zeros(shape, dtype=jnp.int8)
+        #     if solid_index is not None:
+        #         solid_mask = solid_mask.at[
+        #             solid_index[:, 0], solid_index[:, 1], solid_index[:, 2], 0
+        #         ].set(1)
+        # return self.streaming(
+        #     jnp.repeat(
+        #         solid_mask,
+        #         axis=-1,
+        #         repeats=self.q,
+        #     )
+        # )
+        solid_mask = []
+        solid_indices = [[] for i in range(self.n_components)]
         for i in range(self.n_components):
             for bc in self.BCs[i]:
                 if (
@@ -292,31 +238,26 @@ class Multiphase(LBMBase):
                     or isinstance(bc, BounceBackHalfway)
                     or isinstance(bc, BounceBackMoving)
                 ):
-                    solid_indices.append(np.array(bc.indices).T)
-        solid_index = None
-        if not len(solid_indices) == 0:
-            solid_index = np.vstack(solid_indices)
-        if self.dim == 2:
-            shape = (self.nx, self.ny, 1)
-            solid_mask = jnp.zeros(shape, dtype=jnp.int8)
-            if solid_index is not None:
-                solid_mask = solid_mask.at[solid_index[:, 0], solid_index[:, 1], 0].set(
-                    1
-                )
-        else:
-            shape = (self.nx, self.ny, self.nz, 1)
-            solid_mask = jnp.zeros(shape, dtype=jnp.int8)
-            if solid_index is not None:
-                solid_mask = solid_mask.at[
-                    solid_index[:, 0], solid_index[:, 1], solid_index[:, 2], 0
-                ].set(1)
-        return self.streaming(
-            jnp.repeat(
-                solid_mask,
-                axis=-1,
-                repeats=self.q,
-            )
-        )
+                    solid_indices[i].append(np.array(bc.indices).T)
+        for i in range(self.n_components):
+            index = None
+            if not len(solid_indices[i]) == 0:
+                index = np.vstack(solid_indices[i])
+            if self.dim == 2:
+                shape = (self.nx, self.ny, 1)
+                mask = jnp.zeros(shape, dtype=jnp.int8)
+                if index is not None:
+                    mask = mask.at[index[:, 0], index[:, 1], 0].set(1)
+                mask = self.streaming(jnp.repeat(mask, axis=-1, repeats=self.q))
+                solid_mask.append(mask)
+            else:
+                shape = (self.nx, self.ny, self.nz, 1)
+                mask = jnp.zeros(shape, dtype=jnp.int8)
+                if index is not None:
+                    mask = mask.at[index[:, 0], index[:, 1], index[:, 2], 0].set(1)
+                mask = self.streaming(jnp.repeat(mask, axis=-1, repeats=self.q))
+                solid_mask.append(mask)
+        return solid_mask
 
     def _create_boundary_data(self):
         """
@@ -403,15 +344,14 @@ class Multiphase(LBMBase):
             rho_tree,
         )
         rho_ave_tree = map(
-            lambda rho_s: jnp.sum(
-                self.G_ff * rho_s * (1 - self.solid_mask_streamed),
+            lambda rho_s, solid_mask: jnp.sum(
+                self.G_ff * rho_s * (1 - solid_mask),
                 axis=-1,
                 keepdims=True,
             )
-            / jnp.sum(
-                self.G_ff * (1 - self.solid_mask_streamed), axis=-1, keepdims=True
-            ),
+            / jnp.sum(self.G_ff * (1 - solid_mask), axis=-1, keepdims=True),
             rho_s_tree,
+            self.solid_mask_streamed,
         )
         return rho_ave_tree
 
@@ -437,7 +377,7 @@ class Multiphase(LBMBase):
         """
         rho_ave_tree = self.compute_average_density(rho_tree)
 
-        def set_contact_angle(rho, rho_ave, BC, theta, phi, delta_rho):
+        def set_contact_angle(rho, rho_ave, BC):
             rho_min = jnp.min(rho)
             rho_max = jnp.max(rho)
             for bc in BC:
@@ -447,24 +387,17 @@ class Multiphase(LBMBase):
                     or isinstance(bc, BounceBackMoving)
                 ):
                     rho = rho.at[bc.indices].set(
-                        (theta[bc.indices] <= jnp.pi / 2)
-                        * (phi[bc.indices] * rho_ave[bc.indices])
-                        + (theta[bc.indices] > jnp.pi / 2)
-                        * (rho_ave[bc.indices] - delta_rho[bc.indices])
+                        (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices])
+                        + (bc.theta > jnp.pi / 2) * (rho_ave[bc.indices] - bc.delta_rho)
                     )
                     rho = jnp.clip(rho, min=rho_min, max=rho_max)
             return rho
 
         return map(
-            lambda rho, rho_ave, BC, theta, phi, delta_rho: set_contact_angle(
-                rho, rho_ave, BC, theta, phi, delta_rho
-            ),
+            lambda rho, rho_ave, BC: set_contact_angle(rho, rho_ave, BC),
             rho_tree,
             rho_ave_tree,
             self.BCs,
-            self.theta_tree,
-            self.phi_tree,
-            self.delta_rho_tree,
         )
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
@@ -900,11 +833,12 @@ class Multiphase(LBMBase):
             Pytree of fluid-solid interaction force.
         """
         return map(
-            lambda g_ks, rho: -g_ks
+            lambda g_ks, rho, solid_mask: -g_ks
             * rho
-            * jnp.dot(self.G_fs * self.solid_mask_streamed, self.c.T),
+            * jnp.dot(self.G_fs * solid_mask, self.c.T),
             self.g_ks,
             rho_tree,
+            self.solid_mask_streamed,
         )
         # psi_tree, _ = self.compute_potential(rho_tree)
         # psi_s_tree = map(
@@ -914,12 +848,13 @@ class Multiphase(LBMBase):
         #     psi_tree,
         # )
         # return map(
-        #     lambda g_ks, psi, psi_s: -g_ks
+        #     lambda g_ks, psi, psi_s, solid_mask: -g_ks
         #     * psi
-        #     * jnp.dot(self.G_fs * self.solid_mask_streamed * psi_s, self.c.T),
+        #     * jnp.dot(self.G_fs * solid_mask * psi_s, self.c.T),
         #     self.g_ks,
         #     psi_tree,
         #     psi_s_tree,
+        #     self.solid_mask_streamed
         # )
 
     @partial(jit, static_argnums=(0,), inline=True)

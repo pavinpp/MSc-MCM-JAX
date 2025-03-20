@@ -1,3 +1,11 @@
+"""
+Single component 3D droplet example where liquid droplet is suspended in its vapor. The density of each region is computed using Maxwell's Construction. The density profile
+is initialized with smooth profile with specified interface width. Boundary conditions are periodic everywhere. Useful for tuning the various coefficients.
+
+The collision matrix is based on:
+1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+"""
+
 import os
 
 import numpy as np
@@ -112,8 +120,8 @@ class Droplet3D(MultiphaseMRT):
 
 if __name__ == "__main__":
     s_rho = [0.0]
-    s_e = ([1.0],)
-    s_eta = ([1.0],)
+    s_e = [1.0]
+    s_eta = [1.0]
     s_j = [0.0]
     s_q = [1.0]
     s_m = [1.0]
@@ -152,6 +160,10 @@ if __name__ == "__main__":
     M[17, :] = (e[:, 2] ** 2 - e[:, 0] ** 2) * e[:, 1]
     M[18, :] = (e[:, 0] ** 2 - e[:, 1] ** 2) * e[:, 2]
 
+    theta = (np.pi / 2) * np.ones((nx, ny, nz, 1))
+    phi = np.ones((nx, ny, nz, 1))
+    delta_rho = np.zeros((nx, ny, nz, 1))
+
     precision = "f32/f32"
     kwargs = {
         "n_components": 1,
@@ -176,9 +188,6 @@ if __name__ == "__main__":
         "s_v": [1.0],
         "M": [M],
         "kappa": [0.0],
-        "theta": [(np.pi / 2) * np.ones((nx, ny, nz, 1))],
-        "phi": [np.ones((nx, ny, nz, 1))],
-        "delta_rho": [np.zeros((nx, ny, nz, 1))],
         "precision": precision,
         "io_rate": 10000,
         "compute_MLUPS": False,

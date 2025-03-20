@@ -39,7 +39,14 @@ class DropletOnWall2D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         self.BCs[0].append(
-            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                tuple(ind.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                theta[tuple(ind.T)],
+                phi[tuple(ind.T)],
+                delta_rho[tuple(ind.T)],
+            )
         )
 
     def output_data(self, **kwargs):
@@ -115,6 +122,10 @@ if __name__ == "__main__":
     s_j = [0.0]  # Momentum
     s_q = [1.0]
     s_v = [1 / tau]
+
+    theta = 170 * np.pi / 180 * np.ones((nx, ny, 1))
+    phi = 0.0 * np.ones((nx, ny, 1))
+    delta_rho = 1.0 * np.ones((nx, ny, 1))
     kwargs = {
         "lattice": LatticeD2Q9(precision),
         "omega": [1 / tau],
@@ -131,9 +142,6 @@ if __name__ == "__main__":
         "s_j": s_j,
         "s_q": s_q,
         "s_v": s_v,
-        "theta": [170 * np.pi / 180 * np.ones((nx, ny, 1))],  # Contact angle in radians
-        "phi": [0.0 * np.ones((nx, ny, 1))],
-        "delta_rho": [1.0 * np.ones((nx, ny, 1))],
         "EOS": eos,
         "kappa": [0],
         # values not used, can be set as anything

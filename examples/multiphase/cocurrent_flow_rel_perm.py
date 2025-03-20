@@ -51,9 +51,17 @@ class Channel2D(MultiphaseMRT):
                 self.boundingBoxIndices["bottom"],
             )
         )
+        walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
-            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                walls,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta[walls],
+                phi[walls],
+                delta_rho[walls],
+            )
         )
 
     @partial(jit, static_argnums=(0,))
@@ -111,18 +119,18 @@ class CocurrentFlow(MultiphaseMRT):
 
         rho_tree = []
 
-        # Non-wetting fluid
-        rho = (1 - fraction) * rho_t * np.ones((self.nx, self.ny, 1))
-        rho[:, self.ny // 2 - a : self.ny // 2 + a] = fraction * rho_t
+        # Wetting fluid
+        rho = fraction * rho_t * np.ones((self.nx, self.ny, 1))
+        rho[:, self.ny // 2 - a : self.ny // 2 + a] = (1 - fraction) * rho_t
         rho = self.distributed_array_init(
             (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
         )
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
-        # Wetting fluid
-        rho = fraction * rho_t * np.ones((self.nx, self.ny, 1))
-        rho[:, self.ny // 2 - a : self.ny // 2 + a] = (1 - fraction) * rho_t
+        # Non-wetting fluid
+        rho = (1 - fraction) * rho_t * np.ones((self.nx, self.ny, 1))
+        rho[:, self.ny // 2 - a : self.ny // 2 + a] = fraction * rho_t
         rho = self.distributed_array_init(
             (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
         )
@@ -147,12 +155,27 @@ class CocurrentFlow(MultiphaseMRT):
                 self.boundingBoxIndices["bottom"],
             )
         )
+        walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
-            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                walls,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta_w[walls],
+                phi_w[walls],
+                delta_rho_w[walls],
+            )
         )
         self.BCs[1].append(
-            BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                walls,
+                self.gridInfo,
+                self.precisionPolicy,
+                theta_nw[walls],
+                phi_nw[walls],
+                delta_rho_nw[walls],
+            )
         )
 
     @partial(jit, static_argnums=(0,))
@@ -259,6 +282,10 @@ if __name__ == "__main__":
     Phi = [1.4, 1.0]
     Delta_Rho = [0.0, 0.0]
 
+    theta_ = np.ones((nx, ny, 1))
+    phi_ = np.ones((nx, ny, 1))
+    delta_rho_ = np.ones((nx, ny, 1))
+
     # 2D channel simulation to get flow rate
     os.system("rm -rf Flow*")
     # Simulate for a range of viscosity ratio and wetting conditions
@@ -277,9 +304,9 @@ if __name__ == "__main__":
             tau = Tau[i]
             wetting_type = Wetting[i]
             rho_c = Rho[i]
-            theta = Theta[i]
-            phi = Phi[i]
-            delta_rho = Delta_Rho[i]
+            theta = Theta[i] * theta_
+            phi = Phi[i] * phi_
+            delta_rho = Delta_Rho[i] * delta_rho_
             s_rho = [0.0]  # Mass
             s_e = [0.4]
             s_eta = [1.0]
@@ -306,15 +333,6 @@ if __name__ == "__main__":
                 "k": [0],
                 "A": np.zeros((1, 1)),
                 "kappa": [0.0],
-                "theta": [
-                    theta * np.ones((nx, ny, 1)),
-                ],
-                "phi": [
-                    phi * np.ones((nx, ny, 1)),
-                ],
-                "delta_rho": [
-                    delta_rho * np.ones((nx, ny, 1)),
-                ],
                 "io_rate": 20000,
                 "compute_MLUPS": False,
                 "print_info_rate": 20000,
@@ -333,6 +351,14 @@ if __name__ == "__main__":
     # Flow rate obtained from singlephase simulation for wetting and non-wetting channel obtained from Channel2D, see Flow_rate_data.csv
     Single_Q_w = [0.06191386282444, 0.06191386282444, 0.06191386282444]
     Single_Q_nw = [0.06191386282444, 0.6143753528594971, 0.006619240622967482]
+
+    theta_w = (np.pi / 6) * np.ones((nx, ny, 1))
+    theta_nw = (np.pi / 2) * np.ones((nx, ny, 1))
+    phi_w = 1.4 * np.ones((nx, ny, 1))
+    phi_nw = np.ones((nx, ny, 1))
+    delta_rho_w = np.zeros((nx, ny, 1))
+    delta_rho_nw = np.zeros((nx, ny, 1))
+
     os.system("rm -rf Relative* output*")
     for i in range(3):
         visc_ratio = Visc_ratio[i]
@@ -376,18 +402,6 @@ if __name__ == "__main__":
                 "s_v": s_v,
                 "k": [0, 0],
                 "A": np.zeros((2, 2)),
-                "theta": [
-                    (np.pi / 6) * np.ones((nx, ny, 1)),
-                    (np.pi / 2) * np.ones((nx, ny, 1)),
-                ],
-                "phi": [
-                    1.4 * np.ones((nx, ny, 1)),
-                    np.ones((nx, ny, 1)),
-                ],
-                "delta_rho": [
-                    np.zeros((nx, ny, 1)),
-                    np.zeros((nx, ny, 1)),
-                ],
                 "kappa": [0.0, 0.0],
                 "io_rate": 30000,
                 "compute_MLUPS": False,

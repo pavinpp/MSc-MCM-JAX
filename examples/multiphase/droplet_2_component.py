@@ -198,18 +198,6 @@ if __name__ == "__main__":
             "kappa": [0, 0],
             "k": [0, 0],
             "A": np.zeros((2, 2)),
-            "theta": [
-                (np.pi / 2) * np.ones((nx, ny, 1)),
-                (np.pi / 2) * np.ones((nx, ny, 1)),
-            ],
-            "phi": [
-                np.ones((nx, ny, 1)),
-                np.ones((nx, ny, 1)),
-            ],
-            "delta_rho": [
-                np.zeros((nx, ny, 1)),
-                np.zeros((nx, ny, 1)),
-            ],
             "io_rate": 30000,
             "compute_MLUPS": False,
             "print_info_rate": 10000,
