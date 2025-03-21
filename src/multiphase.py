@@ -20,7 +20,13 @@ from jax.tree import map, reduce
 from termcolor import colored
 
 # User-defined libraries
-from src.boundary_conditions import BounceBack, BounceBackHalfway, BounceBackMoving
+from src.boundary_conditions import (
+    BounceBack,
+    BounceBackHalfway,
+    BounceBackMoving,
+    InterpolatedBounceBackBouzidi,
+    InterpolatedBounceBackDifferentiable,
+)
 from src.lattice import LatticeD2Q9, LatticeD3Q19
 from src.base import LBMBase
 from src.utils import downsample_field
@@ -385,6 +391,8 @@ class Multiphase(LBMBase):
                     isinstance(bc, BounceBackHalfway)
                     or isinstance(bc, BounceBack)
                     or isinstance(bc, BounceBackMoving)
+                    or isinstance(bc, InterpolatedBounceBackBouzidi)
+                    or isinstance(bc, InterpolatedBounceBackDifferentiable)
                 ):
                     rho = rho.at[bc.indices].set(
                         (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices])

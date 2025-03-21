@@ -372,7 +372,7 @@ class BounceBack(BoundaryCondition):
         Contact angle, applied for multiphase flows and only set for wall boundary conditions.
     phi: jax.numpy.ndarray; Default: None
         Contact angle parameter phi, applied for multiphase flows and only set for wall boundary conditions.
-    delta_rho: pytree of jax.numpy.ndarray; Default: None
+    delta_rho: jax.numpy.ndarray; Default: None
         Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
 
@@ -1115,15 +1115,32 @@ class InterpolatedBounceBackBouzidi(BounceBackHalfway):
         An array of shape (number_of_bc_cells, q) initialized as None and constructed using implicit_distances array
         during runtime. These "weights" are associated with the fractional distance of fluid cell to the boundary
         position defined as: weights(dir_i) = |x_fluid - x_boundary(dir_i)| / |x_fluid - x_solid(dir_i)|.
+    theta: jax.numpy.ndarray; Default: None
+        Contact angle, applied for multiphase flows and only set for wall boundary conditions.
+    phi: jax.numpy.ndarray; Default: None
+        Contact angle parameter phi, applied for multiphase flows and only set for wall boundary conditions.
+    delta_rho: jax.numpy.ndarray; Default: None
+        Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
 
     def __init__(
-        self, indices, implicit_distances, grid_info, precision_policy, vel=None
+        self,
+        indices,
+        implicit_distances,
+        grid_info,
+        precision_policy,
+        vel=None,
+        theta=None,
+        phi=None,
+        delta_rho=None,
     ):
         super().__init__(indices, grid_info, precision_policy, vel=vel)
         self.name = "InterpolatedBounceBackBouzidi"
         self.implicit_distances = implicit_distances
         self.weights = None
+        self.theta = theta
+        self.phi = phi
+        self.delta_rho = delta_rho
 
     def set_proximity_ratio(self):
         """
@@ -1262,3 +1279,64 @@ class InterpolatedBounceBackDifferentiable(InterpolatedBounceBackBouzidi):
             fbd = self.impose_boundary_vel(fbd, bindex)
         return fbd
 
+
+class ConvectiveOutflow(BoundaryCondition):
+    """
+    Extrapolation outflow boundary condition for a lattice Boltzmann method simulation.
+
+    This class implements the extrapolation outflow boundary condition, which is a type of outflow boundary condition
+    that uses extrapolation to avoid strong wave reflections.
+
+    Attributes
+    ----------
+    name : str
+        The name of the boundary condition. For this class, it is "ExtrapolationOutflow".
+
+    References
+    ----------
+    1. Lou, Q., Guo, Z. & Shi, B. Evaluation of outflow boundary conditions for two-phase lattice Boltzmann equation.
+    Phys. Rev. E 87, 063301 (2013). doi: doi.org/10.1103/PhysRevE.87.063301
+    """
+
+    def __init__(self, indices, gridInfo, precision_policy):
+        super().__init__(indices, gridInfo, precision_policy)
+        self.name = "ConvectiveOutflow"
+        self.needsExtraConfiguration = False
+        self.neighbors_found = False
+
+    def find_neighbors(self):
+        ind = np.array(self.indices).T - self.normals
+        self.indices_nbr = tuple(ind.T)
+        self.neighbors_found
+
+    @partial(jit, static_argnums=(0,))
+    def apply(self, fout, fin):
+        """
+        Applies the convective outflow boundary condition.
+
+        Parameters
+        ----------
+        fout : jax.numpy.ndarray
+            The output distribution functions.
+        fin : jax.numpy.ndarray
+            The input distribution functions.
+
+        Returns
+        -------
+        jax.numpy.ndarray
+            The modified output distribution functions after applying the boundary condition.
+        """
+        if not self.neighbors_found:
+            self.find_neighbors()
+            self.neighbors_found = True
+        f_nbr = fout[self.indices_nbr]
+        rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
+        u_nbr = jnp.sum(
+            (jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr) * self.normals,
+            axis=-1,
+            keepdims=False,
+        )
+        lambda_cbc = jnp.mean(u_nbr)
+        fbd = fin[self.indices]
+        fbd = (fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc)
+        return fbd
