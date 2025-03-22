@@ -73,7 +73,7 @@ class PorousMedia(MultiphaseBGK):
 
         # Same at the outlet
         outlet = self.boundingBoxIndices["right"]
-        rho_outlet = np.ones(
+        rho_outlet = 0.97 * np.ones(
             (outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype
         )
         self.BCs[0].append(
