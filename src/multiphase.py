@@ -387,12 +387,15 @@ class Multiphase(LBMBase):
             rho_min = jnp.min(rho)
             rho_max = jnp.max(rho)
             for bc in BC:
-                if (
-                    isinstance(bc, BounceBackHalfway)
-                    or isinstance(bc, BounceBack)
-                    or isinstance(bc, BounceBackMoving)
-                    or isinstance(bc, InterpolatedBounceBackBouzidi)
-                    or isinstance(bc, InterpolatedBounceBackDifferentiable)
+                if isinstance(
+                    bc,
+                    (
+                        BounceBackHalfway,
+                        BounceBack,
+                        BounceBackMoving,
+                        InterpolatedBounceBackBouzidi,
+                        InterpolatedBounceBackDifferentiable,
+                    ),
                 ):
                     rho = rho.at[bc.indices].set(
                         (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices])
