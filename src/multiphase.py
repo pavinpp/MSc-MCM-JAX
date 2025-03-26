@@ -828,45 +828,45 @@ class Multiphase(LBMBase):
             list(vmap(ffk_2, in_axes=(0))(self.A)),
         )
 
-    @partial(jit, static_argnums=(0,))
-    def compute_fluid_solid_force(self, rho_tree):
-        """
-        Compute the fluid-fluid interaction force using the effective mass (psi).
+    # @partial(jit, static_argnums=(0,))
+    # def compute_fluid_solid_force(self, rho_tree):
+    #     """
+    #     Compute the fluid-fluid interaction force using the effective mass (psi).
 
-        Parameters
-        ----------
-        psi_tree: Pytree of jax.numpy.ndarray
-            Pytree of pseudopotential of all components.
+    #     Parameters
+    #     ----------
+    #     psi_tree: Pytree of jax.numpy.ndarray
+    #         Pytree of pseudopotential of all components.
 
-        Returns
-        -------
-        Pytree of jax.numpy.ndarray
-            Pytree of fluid-solid interaction force.
-        """
-        return map(
-            lambda g_ks, rho, solid_mask: -g_ks
-            * rho
-            * jnp.dot(self.G_fs * solid_mask, self.c.T),
-            self.g_ks,
-            rho_tree,
-            self.solid_mask_streamed,
-        )
-        # psi_tree, _ = self.compute_potential(rho_tree)
-        # psi_s_tree = map(
-        #     lambda psi: self.streaming(
-        #         jnp.repeat(psi, axis=-1, repeats=self.lattice.q)
-        #     ),
-        #     psi_tree,
-        # )
-        # return map(
-        #     lambda g_ks, psi, psi_s, solid_mask: -g_ks
-        #     * psi
-        #     * jnp.dot(self.G_fs * solid_mask * psi_s, self.c.T),
-        #     self.g_ks,
-        #     psi_tree,
-        #     psi_s_tree,
-        #     self.solid_mask_streamed
-        # )
+    #     Returns
+    #     -------
+    #     Pytree of jax.numpy.ndarray
+    #         Pytree of fluid-solid interaction force.
+    #     """
+    #     return map(
+    #         lambda g_ks, rho, solid_mask: -g_ks
+    #         * rho
+    #         * jnp.dot(self.G_fs * solid_mask, self.c.T),
+    #         self.g_ks,
+    #         rho_tree,
+    #         self.solid_mask_streamed,
+    #     )
+    # psi_tree, _ = self.compute_potential(rho_tree)
+    # psi_s_tree = map(
+    #     lambda psi: self.streaming(
+    #         jnp.repeat(psi, axis=-1, repeats=self.lattice.q)
+    #     ),
+    #     psi_tree,
+    # )
+    # return map(
+    #     lambda g_ks, psi, psi_s, solid_mask: -g_ks
+    #     * psi
+    #     * jnp.dot(self.G_fs * solid_mask * psi_s, self.c.T),
+    #     self.g_ks,
+    #     psi_tree,
+    #     psi_s_tree,
+    #     self.solid_mask_streamed
+    # )
 
     @partial(jit, static_argnums=(0,), inline=True)
     def apply_force(self, f_postcollision_tree, feq_tree, rho_tree, u_tree):

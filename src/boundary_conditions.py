@@ -1307,7 +1307,6 @@ class ConvectiveOutflow(BoundaryCondition):
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
         self.indices_nbr = tuple(ind.T)
-        self.neighbors_found
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, fin):
@@ -1334,9 +1333,9 @@ class ConvectiveOutflow(BoundaryCondition):
         u_nbr = jnp.sum(
             (jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr) * self.normals,
             axis=-1,
-            keepdims=False,
+            keepdims=True,
         )
         lambda_cbc = jnp.mean(u_nbr)
-        fbd = fin[self.indices]
+        fbd = fout[self.indices]
         fbd = (fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc)
         return fbd
