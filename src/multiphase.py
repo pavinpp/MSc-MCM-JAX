@@ -49,8 +49,6 @@ class Multiphase(LBMBase):
        Weighting factor, used for linear combination of Shan-Chen and Zhang-Chen Forces
     g_kk: numpy.ndarray
         Inter component interaction strength. Its a matrix of size n_components x n_components. It must be symmetric.
-    g_ks: list
-        Component-wall interaction strength. Its a vector of size (n_components,).
 
     References
     ----------
@@ -73,7 +71,7 @@ class Multiphase(LBMBase):
         self.body_force = kwargs.get("body_force", None)
 
         self.G_ff = self.compute_ff_greens_function()
-        self.G_fs = self.compute_fs_greens_function()
+        # self.G_fs = self.compute_fs_greens_function()
 
         # self.omega = jnp.array(self.omega, dtype=self.precisionPolicy.compute_dtype)
         self.g_kkprime = jnp.array(
