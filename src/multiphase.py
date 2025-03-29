@@ -1509,7 +1509,7 @@ class MultiphaseMRT(Multiphase):
 
         delta_u_tree = map(lambda F, rho: F / rho, F_tree, rho_tree)
         u_temp_tree = map(lambda u, delta_u: u + delta_u, u_tree, delta_u_tree)
-        feq_force_tree = self.equilibrium(rho_tree, u_temp_tree)
+        feq_force_tree = self.equilibrium(rho_tree, u_temp_tree, cast_output=False)
         meq_force_tree = map(lambda feq, M: jnp.dot(feq, M), feq_force_tree, self.M)
         return map(
             lambda m, meq_force, meq: m + meq_force - meq,
@@ -1526,7 +1526,7 @@ class MultiphaseMRT(Multiphase):
         fin_tree = map(lambda f: self.precisionPolicy.cast_to_compute(f), fin_tree)
         rho_tree, u_tree = self.update_macroscopic(fin_tree)
         m_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
-        feq_tree = self.equilibrium(rho_tree, u_tree)
+        feq_tree = self.equilibrium(rho_tree, u_tree, cast_output=False)
         meq_tree = map(lambda feq, M: jnp.dot(feq, M), feq_tree, self.M)
         psi_tree, _ = self.compute_potential(rho_tree)
         C_tree = self.adjust_surface_tension(psi_tree)
