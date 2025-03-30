@@ -27,19 +27,12 @@ import h5py
 class Droplet3D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
         rho_tree = []
-        dist = (
-            (x - self.nx / 2) ** 2
-            + (y - self.ny / 2) ** 2
-            + (z - self.nz / 2) ** 2
-            - r**2
-        )
+        dist = (x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2 + (z - self.nz / 2) ** 2 - r**2
 
         # Water
         rho_inside = rho_w_l
         rho_outside = rho_w_g
-        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (
-            rho_inside - rho_outside
-        ) * np.tanh(2 * (dist - r) / width)
+        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((nx, ny, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
@@ -52,9 +45,7 @@ class Droplet3D(MultiphaseMRT):
         # CO2
         rho_inside = rho_c_g
         rho_outside = rho_c_l
-        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (
-            rho_inside - rho_outside
-        ) * np.tanh(2 * (dist - r) / width)
+        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((nx, ny, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
@@ -110,47 +101,28 @@ class Droplet3D(MultiphaseMRT):
         p_east = p[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
         p_back = p[self.nx // 2, self.ny // 2, self.nz // 2 - offset, 0]
         p_front = p[self.nx // 2, self.ny // 2, self.nz // 2 + offset, 0]
-        pressure_difference = (
-            p[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-            - (p_north + p_south + p_west + p_east + p_front + p_back) / 6
-        )
+        pressure_difference = p[self.nx // 2, self.ny // 2, self.nz // 2, 0] - (p_north + p_south + p_west + p_east + p_front + p_back) / 6
         print(f"Pressure difference for radius = {r}: {pressure_difference}")
 
         rho_north = rho_CO2[self.nx // 2, self.ny // 2 - offset, self.nz // 2, 0]
         rho_south = rho_CO2[self.nx // 2, self.ny // 2 + offset, self.nz // 2, 0]
         rho_west = rho_CO2[self.nx // 2 - offset, self.ny // 2, self.nz // 2, 0]
         rho_east = rho_CO2[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
-        rho_back = rho_CO2[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0
-        ]
-        rho_front = rho_CO2[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0
-        ]
-        rho_l_pred = (
-            rho_north + rho_south + rho_west + rho_east + rho_front + rho_back
-        ) / 6
+        rho_back = rho_CO2[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
+        rho_front = rho_CO2[self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0]
+        rho_l_pred = (rho_north + rho_south + rho_west + rho_east + rho_front + rho_back) / 6
         rho_g_pred = rho_CO2[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-        print(
-            f"%Error CO2 Min: {(rho_g_pred - rho_c_g) * 100 / rho_c_g} Max: {(rho_l_pred - rho_c_l) * 100 / rho_c_l}"
-        )
+        print(f"%Error CO2 Min: {(rho_g_pred - rho_c_g) * 100 / rho_c_g} Max: {(rho_l_pred - rho_c_l) * 100 / rho_c_l}")
 
         rho_north = rho_water[self.nx // 2, self.ny // 2 - offset, self.nz // 2, 0]
         rho_south = rho_water[self.nx // 2, self.ny // 2 + offset, self.nz // 2, 0]
         rho_west = rho_water[self.nx // 2 - offset, self.ny // 2, self.nz // 2, 0]
         rho_east = rho_water[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
-        rho_back = rho_water[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0
-        ]
-        rho_front = rho_water[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0
-        ]
-        rho_g_pred = (
-            rho_north + rho_south + rho_west + rho_east + rho_front + rho_back
-        ) / 6
+        rho_back = rho_water[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
+        rho_front = rho_water[self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0]
+        rho_g_pred = (rho_north + rho_south + rho_west + rho_east + rho_front + rho_back) / 6
         rho_l_pred = rho_water[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-        print(
-            f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}"
-        )
+        print(f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}")
 
         save_fields_vtk(
             timestep,
@@ -163,20 +135,13 @@ class Droplet3D(MultiphaseMRT):
 # Multi-component droplet on wall example to tune contact angle
 class DropletOnWall3D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
-        dist = (
-            (x - self.nx / 2) ** 2
-            + (y - self.ny / 2) ** 2
-            + (z - self.nz / 2) ** 2
-            - r**2
-        )
+        dist = (x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2 + (z - self.nz / 2) ** 2 - r**2
         rho_tree = []
 
         # Water
         rho_inside = rho_w_l
         rho_outside = rho_w_g
-        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (
-            rho_inside - rho_outside
-        ) * np.tanh(2 * (dist - r) / width)
+        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((nx, ny, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
@@ -189,9 +154,7 @@ class DropletOnWall3D(MultiphaseMRT):
         # CO2
         rho_inside = rho_c_g
         rho_outside = rho_c_l
-        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (
-            rho_inside - rho_outside
-        ) * np.tanh(2 * (dist - r) / width)
+        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
@@ -260,37 +223,21 @@ class DropletOnWall3D(MultiphaseMRT):
         rho_south = rho_CO2[self.nx // 2, self.ny // 2 + offset, self.nz // 2, 0]
         rho_west = rho_CO2[self.nx // 2 - offset, self.ny // 2, self.nz // 2, 0]
         rho_east = rho_CO2[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
-        rho_back = rho_CO2[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0
-        ]
-        rho_front = rho_CO2[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0
-        ]
-        rho_l_pred = (
-            rho_north + rho_south + rho_west + rho_east + rho_front + rho_back
-        ) / 6
+        rho_back = rho_CO2[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
+        rho_front = rho_CO2[self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0]
+        rho_l_pred = (rho_north + rho_south + rho_west + rho_east + rho_front + rho_back) / 6
         rho_g_pred = rho_CO2[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-        print(
-            f"%Error CO2 Min: {(rho_g_pred - rho_c_g) * 100 / rho_c_g} Max: {(rho_l_pred - rho_c_l) * 100 / rho_c_l}"
-        )
+        print(f"%Error CO2 Min: {(rho_g_pred - rho_c_g) * 100 / rho_c_g} Max: {(rho_l_pred - rho_c_l) * 100 / rho_c_l}")
 
         rho_north = rho_water[self.nx // 2, self.ny // 2 - offset, self.nz // 2, 0]
         rho_south = rho_water[self.nx // 2, self.ny // 2 + offset, self.nz // 2, 0]
         rho_west = rho_water[self.nx // 2 - offset, self.ny // 2, self.nz // 2, 0]
         rho_east = rho_water[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
-        rho_back = rho_water[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0
-        ]
-        rho_front = rho_water[
-            self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0
-        ]
-        rho_g_pred = (
-            rho_north + rho_south + rho_west + rho_east + rho_front + rho_back
-        ) / 6
+        rho_back = rho_water[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
+        rho_front = rho_water[self.nx // 2 + offset, self.ny // 2, self.nz // 2 + offset, 0]
+        rho_g_pred = (rho_north + rho_south + rho_west + rho_east + rho_front + rho_back) / 6
         rho_l_pred = rho_water[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-        print(
-            f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}"
-        )
+        print(f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}")
 
         save_fields_vtk(
             timestep,
@@ -518,9 +465,7 @@ if __name__ == "__main__":
     rho_w_g = 0.2580  # gas phase density (solubility of water in CO2)
     nu_w = (1.59e-3 * 1e-4) * C_s / C_l**2  # 1.59e-3 cm^2/s converted to lattice units
     tau_w = 1.43  # 3 * nu_w + 0.5
-    Tc_w = (
-        0.03646 * 473.15 / 647.1
-    )  # Set temperature as 200C = 473.15K, which is converted to lattice units using critical temp. in LU: 0.03646
+    Tc_w = 0.03646 * 473.15 / 647.1  # Set temperature as 200C = 473.15K, which is converted to lattice units using critical temp. in LU: 0.03646
 
     # CO2 properties (subcritical)
     rho_c_l = 2.4454  # liquid phase density

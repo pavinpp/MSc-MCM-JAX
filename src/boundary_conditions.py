@@ -81,9 +81,7 @@ class BoundaryCondition(object):
         boundaryMask = self.get_boundary_mask(grid_mask)
         self.normals = self.get_normals(boundaryMask)
         self.imissing, self.iknown = self.get_missing_indices(boundaryMask)
-        self.imissingMask, self.iknownMask, self.imiddleMask = self.get_missing_mask(
-            boundaryMask
-        )
+        self.imissingMask, self.iknownMask, self.imiddleMask = self.get_missing_mask(boundaryMask)
 
         return
 
@@ -346,10 +344,7 @@ class BoundaryCondition(object):
         c = jnp.array(self.lattice.c, dtype=self.precisionPolicy.compute_dtype)
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
-        phi = (
-            f_postcollision[self.indices][bindex, self.iknown]
-            + f_poststreaming[self.indices][bindex, self.imissing]
-        )
+        phi = f_postcollision[self.indices][bindex, self.iknown] + f_poststreaming[self.indices][bindex, self.imissing]
         force = jnp.sum(c[:, self.iknown] * phi, axis=-1).T
         return force
 
@@ -376,9 +371,7 @@ class BounceBack(BoundaryCondition):
         Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
 
-    def __init__(
-        self, indices, gridInfo, precision_policy, theta=None, phi=None, delta_rho=None
-    ):
+    def __init__(self, indices, gridInfo, precision_policy, theta=None, phi=None, delta_rho=None):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "BounceBackFullway"
         self.implementationStep = "PostCollision"
@@ -563,13 +556,8 @@ class BounceBackHalfway(BoundaryCondition):
         nbd_modified = len(self.indices[0])
         if (nbd_orig != nbd_modified) and self.vel is not None:
             vel_avg = np.mean(self.vel, axis=0)
-            self.vel = (
-                jnp.zeros(indices_new.shape, dtype=self.precisionPolicy.compute_dtype)
-                + vel_avg
-            )
-            print(
-                "WARNING: assuming a constant averaged velocity vector is imposed at all BC cells!"
-            )
+            self.vel = jnp.zeros(indices_new.shape, dtype=self.precisionPolicy.compute_dtype) + vel_avg
+            print("WARNING: assuming a constant averaged velocity vector is imposed at all BC cells!")
 
         return
 
@@ -798,9 +786,7 @@ class ZouHe(BoundaryCondition):
             rho = self.prescribed
             vel = self.calculate_vel(fpop, rho)
         else:
-            raise ValueError(
-                f"type = {self.type} not supported! Use 'pressure' or 'velocity'."
-            )
+            raise ValueError(f"type = {self.type} not supported! Use 'pressure' or 'velocity'.")
 
         # compute feq at the boundary
         feq = self.equilibrium(rho, vel)
@@ -815,11 +801,7 @@ class ZouHe(BoundaryCondition):
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
         fbd = fpop[self.indices]
-        fknown = (
-            fpop[self.indices][bindex, self.iknown]
-            + feq[bindex, self.imissing]
-            - feq[bindex, self.iknown]
-        )
+        fknown = fpop[self.indices][bindex, self.iknown] + feq[bindex, self.imissing] - feq[bindex, self.iknown]
         fbd = fbd.at[bindex, self.imissing].set(fknown)
         return fbd
 
@@ -1064,9 +1046,7 @@ class ExtrapolationOutflow(BoundaryCondition):
         fpc_bdr = f_postcollision[self.indices]
         fpop = fps_bdr[bindex, self.imissing]
         fpop_neighbour = fps_nbr[bindex, self.imissing]
-        fpop_extrapolated = (
-            self.sound_speed * fpop_neighbour + (1.0 - self.sound_speed) * fpop
-        )
+        fpop_extrapolated = self.sound_speed * fpop_neighbour + (1.0 - self.sound_speed) * fpop
 
         # Use the iknown directions of f_postcollision that leave the domain during streaming to store the BC data
         fpc_bdr = fpc_bdr.at[bindex, self.iknown].set(fpop_extrapolated)
@@ -1192,18 +1172,10 @@ class InterpolatedBounceBackBouzidi(BounceBackHalfway):
         f_poststreaming_iknown = fout[self.indices][bindex, self.iknown]
 
         # if weights<0.5
-        fs_near = (
-            2.0 * self.weights * f_postcollision_iknown
-            + (1.0 - 2.0 * self.weights) * f_poststreaming_iknown
-        )
+        fs_near = 2.0 * self.weights * f_postcollision_iknown + (1.0 - 2.0 * self.weights) * f_poststreaming_iknown
 
         # if weights>=0.5
-        fs_far = (
-            1.0 / (2.0 * self.weights) * f_postcollision_iknown
-            + (2.0 * self.weights - 1.0)
-            / (2.0 * self.weights)
-            * f_postcollision_imissing
-        )
+        fs_far = 1.0 / (2.0 * self.weights) * f_postcollision_iknown + (2.0 * self.weights - 1.0) / (2.0 * self.weights) * f_postcollision_imissing
 
         # combine near and far contributions
         fmissing = jnp.where(self.weights < 0.5, fs_near, fs_far)
@@ -1236,12 +1208,8 @@ class InterpolatedBounceBackDifferentiable(InterpolatedBounceBackBouzidi):
         The name of the boundary condition. For this class, it is "InterpolatedBounceBackDifferentiable".
     """
 
-    def __init__(
-        self, indices, implicit_distances, grid_info, precision_policy, vel=None
-    ):
-        super().__init__(
-            indices, implicit_distances, grid_info, precision_policy, vel=vel
-        )
+    def __init__(self, indices, implicit_distances, grid_info, precision_policy, vel=None):
+        super().__init__(indices, implicit_distances, grid_info, precision_policy, vel=vel)
         self.name = "InterpolatedBounceBackDifferentiable"
 
     @partial(jit, static_argnums=(0,))
@@ -1269,10 +1237,9 @@ class InterpolatedBounceBackDifferentiable(InterpolatedBounceBackBouzidi):
         f_postcollision_iknown = fin[self.indices][bindex, self.iknown]
         f_postcollision_imissing = fin[self.indices][bindex, self.imissing]
         f_poststreaming_iknown = fout[self.indices][bindex, self.iknown]
-        fmissing = (
-            (1.0 - self.weights) * f_poststreaming_iknown
-            + self.weights * (f_postcollision_imissing + f_postcollision_iknown)
-        ) / (1.0 + self.weights)
+        fmissing = ((1.0 - self.weights) * f_poststreaming_iknown + self.weights * (f_postcollision_imissing + f_postcollision_iknown)) / (
+            1.0 + self.weights
+        )
         fbd = fbd.at[bindex, self.imissing].set(fmissing)
 
         if self.vel is not None:

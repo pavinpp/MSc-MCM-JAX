@@ -74,9 +74,7 @@ class Multiphase(LBMBase):
         # self.G_fs = self.compute_fs_greens_function()
 
         # self.omega = jnp.array(self.omega, dtype=self.precisionPolicy.compute_dtype)
-        self.g_kkprime = jnp.array(
-            self.g_kkprime, dtype=self.precisionPolicy.compute_dtype
-        )
+        self.g_kkprime = jnp.array(self.g_kkprime, dtype=self.precisionPolicy.compute_dtype)
 
         self.solid_mask_streamed = self.get_solid_mask_streamed()
 
@@ -114,15 +112,11 @@ class Multiphase(LBMBase):
             raise ValueError("Modification coefficient must be provided")
         if isinstance(value, float) or isinstance(value, int):
             if self.n_components != 1:
-                raise ValueError(
-                    "The number of modification coefficients provided does not match the number of components in the system"
-                )
+                raise ValueError("The number of modification coefficients provided does not match the number of components in the system")
             self._k = [value]
         elif isinstance(value, list):
             if len(value) != self.n_components:
-                raise ValueError(
-                    "The number of modification coefficients provided does not match the number of components in the system"
-                )
+                raise ValueError("The number of modification coefficients provided does not match the number of components in the system")
         self._k = value
 
     @property
@@ -135,9 +129,7 @@ class Multiphase(LBMBase):
             raise ValueError("Weight coefficient value must be provided")
         if isinstance(value, np.ndarray):
             if value.shape != (self.n_components, self.n_components):
-                raise ValueError(
-                    "The dimensions of A should match the number of components"
-                )
+                raise ValueError("The dimensions of A should match the number of components")
         self._A = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
 
     @property
@@ -147,13 +139,9 @@ class Multiphase(LBMBase):
     @body_force.setter
     def body_force(self, value):
         if isinstance(value, list):
-            self._body_force = jnp.array(
-                np.array(value), dtype=self.precisionPolicy.compute_dtype
-            )
+            self._body_force = jnp.array(np.array(value), dtype=self.precisionPolicy.compute_dtype)
         if isinstance(value, np.ndarray):
-            self._body_force = jnp.array(
-                value, dtype=self.precisionPolicy.compute_dtype
-            )
+            self._body_force = jnp.array(value, dtype=self.precisionPolicy.compute_dtype)
 
     @property
     def g_kkprime(self):
@@ -161,14 +149,10 @@ class Multiphase(LBMBase):
 
     @g_kkprime.setter
     def g_kkprime(self, value):
-        if not isinstance(value, np.ndarray) and not isinstance(
-            value, jax.numpy.ndarray
-        ):
+        if not isinstance(value, np.ndarray) and not isinstance(value, jax.numpy.ndarray):
             raise ValueError("g_kkprime must be a numpy array or jax.numpy.ndarray")
         if value.shape != (self.n_components, self.n_components):
-            raise ValueError(
-                "g_kkprime must be a matrix of size n_components x n_components"
-            )
+            raise ValueError("g_kkprime must be a matrix of size n_components x n_components")
         if not np.allclose(value, np.transpose(value), atol=1e-6):
             raise ValueError("g_kkprime must be a symmetric matrix")
         self._g_kkprime = np.array(value)
@@ -237,11 +221,7 @@ class Multiphase(LBMBase):
         solid_indices = [[] for i in range(self.n_components)]
         for i in range(self.n_components):
             for bc in self.BCs[i]:
-                if (
-                    isinstance(bc, BounceBack)
-                    or isinstance(bc, BounceBackHalfway)
-                    or isinstance(bc, BounceBackMoving)
-                ):
+                if isinstance(bc, BounceBack) or isinstance(bc, BounceBackHalfway) or isinstance(bc, BounceBackMoving):
                     solid_indices[i].append(np.array(bc.indices).T)
         for i in range(self.n_components):
             index = None
@@ -274,14 +254,8 @@ class Multiphase(LBMBase):
         # stream into a boundary voxel.
         for i in range(self.n_components):
             print(f"Component: {i + 1}")
-            solid_halo_list = [
-                np.array(bc.indices).T for bc in self.BCs[i] if bc.isSolid
-            ]
-            solid_halo_voxels = (
-                np.unique(np.vstack(solid_halo_list), axis=0)
-                if solid_halo_list
-                else None
-            )
+            solid_halo_list = [np.array(bc.indices).T for bc in self.BCs[i] if bc.isSolid]
+            solid_halo_voxels = np.unique(np.vstack(solid_halo_list), axis=0) if solid_halo_list else None
 
             # Create the grid mask on each process
             start = time.time()
@@ -292,9 +266,7 @@ class Multiphase(LBMBase):
             for bc in self.BCs[i]:
                 assert bc.implementationStep in ["PostStreaming", "PostCollision"]
                 bc.create_local_mask_and_normal_arrays(grid_mask)
-            print(
-                "Time to create the local masks and normal arrays:", time.time() - start
-            )
+            print("Time to create the local masks and normal arrays:", time.time() - start)
 
     @partial(jit, static_argnums=(0, 3), inline=True)
     def equilibrium(self, rho_tree, u_tree, cast_output=True):
@@ -322,13 +294,9 @@ class Multiphase(LBMBase):
 
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype)
         cu_tree = map(lambda u: 3.0 * jnp.dot(u, c), u_tree)
-        usqr_tree = map(
-            lambda u: 1.5 * jnp.sum(jnp.square(u), axis=-1, keepdims=True), u_tree
-        )
+        usqr_tree = map(lambda u: 1.5 * jnp.sum(jnp.square(u), axis=-1, keepdims=True), u_tree)
         feq_tree = map(
-            lambda rho, udote, udotu: rho
-            * self.w
-            * (1.0 + udote * (1.0 + 0.5 * udote) - udotu),
+            lambda rho, udote, udotu: rho * self.w * (1.0 + udote * (1.0 + 0.5 * udote) - udotu),
             rho_tree,
             cu_tree,
             usqr_tree,
@@ -342,9 +310,7 @@ class Multiphase(LBMBase):
     @partial(jit, static_argnums=(0,))
     def compute_average_density(self, rho_tree):
         rho_s_tree = map(
-            lambda rho: self.streaming(
-                jnp.repeat(rho, axis=-1, repeats=self.lattice.q)
-            ),
+            lambda rho: self.streaming(jnp.repeat(rho, axis=-1, repeats=self.lattice.q)),
             rho_tree,
         )
         rho_ave_tree = map(
@@ -396,8 +362,7 @@ class Multiphase(LBMBase):
                     ),
                 ):
                     rho = rho.at[bc.indices].set(
-                        (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices])
-                        + (bc.theta > jnp.pi / 2) * (rho_ave[bc.indices] - bc.delta_rho)
+                        (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices]) + (bc.theta > jnp.pi / 2) * (rho_ave[bc.indices] - bc.delta_rho)
                     )
                     rho = jnp.clip(rho, min=rho_min, max=rho_max)
             return rho
@@ -526,13 +491,9 @@ class Multiphase(LBMBase):
             shape = (self.nx, self.ny, self.nz, self.q)
         f_tree = []
         if rho0_tree is not None and u0_tree is not None:
-            assert len(rho0_tree) == self.n_components, (
-                "The initial density values for all components must be provided"
-            )
+            assert len(rho0_tree) == self.n_components, "The initial density values for all components must be provided"
 
-            assert len(u0_tree) == self.n_components, (
-                "The initial velocity values for all components must be provided."
-            )
+            assert len(u0_tree) == self.n_components, "The initial velocity values for all components must be provided."
 
             for i in range(self.n_components):
                 rho0, u0 = rho0_tree[i], u0_tree[i]
@@ -541,11 +502,7 @@ class Multiphase(LBMBase):
                 f_tree.append(self.initialize_populations(rho0, u0))
         else:
             for i in range(self.n_components):
-                f_tree.append(
-                    self.distributed_array_init(
-                        shape, self.precisionPolicy.output_dtype, init_val=self.w
-                    )
-                )
+                f_tree.append(self.distributed_array_init(shape, self.precisionPolicy.output_dtype, init_val=self.w))
         return f_tree
 
     @partial(jit, static_argnums=(0,), inline=True)
@@ -778,9 +735,7 @@ class Multiphase(LBMBase):
             lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
             psi_tree,
         )
-        U_s_tree = map(
-            lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree
-        )
+        U_s_tree = map(lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree)
 
         def ffk_1(Ai, g_kkprime):
             """
@@ -961,16 +916,12 @@ class Multiphase(LBMBase):
             pytree of post-collision distribution function.
         """
         f_postcollision_tree = self.collision(f_poststreaming_tree)
-        f_postcollision_tree = self.apply_bc(
-            f_postcollision_tree, f_poststreaming_tree, timestep, "PostCollision"
-        )
+        f_postcollision_tree = self.apply_bc(f_postcollision_tree, f_poststreaming_tree, timestep, "PostCollision")
         f_poststreaming_tree = map(
             lambda f_postcollision: self.streaming(f_postcollision),
             f_postcollision_tree,
         )
-        f_poststreaming_tree = self.apply_bc(
-            f_poststreaming_tree, f_postcollision_tree, timestep, "PostStreaming"
-        )
+        f_poststreaming_tree = self.apply_bc(f_poststreaming_tree, f_postcollision_tree, timestep, "PostStreaming")
 
         if return_fpost:
             return f_poststreaming_tree, f_postcollision_tree
@@ -1012,44 +963,30 @@ class Multiphase(LBMBase):
                 #     f_tree, shardings
                 # )
                 try:
-                    f_tree = self.mngr.restore(
-                        latest_step, args=orb.args.StandardRestore(state)
-                    )
+                    f_tree = self.mngr.restore(latest_step, args=orb.args.StandardRestore(state))
                     print(f"Restored checkpoint at step {latest_step}.")
                 except ValueError:
-                    raise ValueError(
-                        f"Failed to restore checkpoint at step {latest_step}."
-                    )
+                    raise ValueError(f"Failed to restore checkpoint at step {latest_step}.")
 
                 start_step = latest_step + 1
                 if not (t_max > start_step):
-                    raise ValueError(
-                        f"Simulation already exceeded maximum allowable steps (t_max  = {t_max}). Consider increasing t_max."
-                    )
+                    raise ValueError(f"Simulation already exceeded maximum allowable steps (t_max  = {t_max}). Consider increasing t_max.")
 
         if self.computeMLUPS:
             start = time.time()
 
         # Loop over all time steps
         for timestep in range(start_step, t_max + 1):
-            io_flag = self.ioRate > 0 and (
-                timestep % self.ioRate == 0 or timestep == t_max
-            )
-            print_iter_flag = (
-                self.printInfoRate > 0 and timestep % self.printInfoRate == 0
-            )
-            checkpoint_flag = (
-                self.checkpointRate > 0 and timestep % self.checkpointRate == 0
-            )
+            io_flag = self.ioRate > 0 and (timestep % self.ioRate == 0 or timestep == t_max)
+            print_iter_flag = self.printInfoRate > 0 and timestep % self.printInfoRate == 0
+            checkpoint_flag = self.checkpointRate > 0 and timestep % self.checkpointRate == 0
 
             if io_flag:
                 # Update the macroscopic variables and save the previous values (for error computation)
                 rho_prev_tree, _ = self.update_macroscopic(f_tree)
                 u_prev_tree = self.macroscopic_velocity(f_tree, rho_prev_tree)
                 rho_prev_tree = map(
-                    lambda rho_prev: downsample_field(
-                        rho_prev, self.downsamplingFactor
-                    ),
+                    lambda rho_prev: downsample_field(rho_prev, self.downsamplingFactor),
                     rho_prev_tree,
                 )
                 psi_prev_tree, _ = self.compute_potential(rho_prev_tree)
@@ -1065,9 +1002,7 @@ class Multiphase(LBMBase):
 
                 # Gather the data from all processes and convert it to numpy arrays (move to host memory)
                 p_prev_total = process_allgather(p_prev_total)
-                rho_prev_tree = map(
-                    lambda rho_prev: process_allgather(rho_prev), rho_prev_tree
-                )
+                rho_prev_tree = map(lambda rho_prev: process_allgather(rho_prev), rho_prev_tree)
                 u_prev_tree = map(lambda u_prev: process_allgather(u_prev), u_prev_tree)
                 rho_total_prev = process_allgather(rho_total_prev)
                 u_total_prev = process_allgather(u_total_prev)
@@ -1098,9 +1033,7 @@ class Multiphase(LBMBase):
                     lambda rho: downsample_field(rho, self.downsamplingFactor),
                     rho_tree,
                 )
-                u_tree = map(
-                    lambda u: downsample_field(u, self.downsamplingFactor), u_tree
-                )
+                u_tree = map(lambda u: downsample_field(u, self.downsamplingFactor), u_tree)
 
                 rho_total = self.compute_total_density(rho_tree)
                 u_total = self.compute_total_velocity(rho_tree, u_tree)
@@ -1152,14 +1085,12 @@ class Multiphase(LBMBase):
             end = time.time()
             if self.dim == 2:
                 print(
-                    colored("Domain: ", "blue")
-                    + colored(f"{self.nx} x {self.ny}", "green")
+                    colored("Domain: ", "blue") + colored(f"{self.nx} x {self.ny}", "green")
                     if self.dim == 2
                     else colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
                 )
                 print(
-                    colored("Number of voxels: ", "blue")
-                    + colored(f"{self.nx * self.ny}", "green")
+                    colored("Number of voxels: ", "blue") + colored(f"{self.nx * self.ny}", "green")
                     if self.dim == 2
                     else colored(f"{self.nx * self.ny * self.nz}", "green")
                 )
@@ -1172,14 +1103,8 @@ class Multiphase(LBMBase):
                 )
 
             elif self.dim == 3:
-                print(
-                    colored("Domain: ", "blue")
-                    + colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
-                )
-                print(
-                    colored("Number of voxels: ", "blue")
-                    + colored(f"{self.nx * self.ny * self.nz}", "green")
-                )
+                print(colored("Domain: ", "blue") + colored(f"{self.nx} x {self.ny} x {self.nz}", "green"))
+                print(colored("Number of voxels: ", "blue") + colored(f"{self.nx * self.ny * self.nz}", "green"))
                 print(
                     colored("MLUPS: ", "blue")
                     + colored(
@@ -1285,9 +1210,7 @@ class MultiphaseBGK(Multiphase):
         rho_tree, u_tree = self.update_macroscopic(fin_tree)
         feq_tree = self.equilibrium(rho_tree, u_tree, cast_output=False)
         fneq_tree = map(lambda feq, fin: feq - fin, feq_tree, fin_tree)
-        fout_tree = map(
-            lambda fin, fneq, omega: fin + omega * fneq, fin_tree, fneq_tree, self.omega
-        )
+        fout_tree = map(lambda fin, fneq, omega: fin + omega * fneq, fin_tree, fneq_tree, self.omega)
 
         fout_tree = self.apply_force(fout_tree, feq_tree, rho_tree, u_tree)
 
@@ -1333,29 +1256,27 @@ class MultiphaseMRT(Multiphase):
             self.s_m = kwargs.get("s_m")
             self.S = map(
                 lambda s_rho, s_e, s_eta, s_j, s_q, s_v, s_pi, s_m: jnp.array(
-                    np.diag(
-                        [
-                            s_rho,
-                            s_e,
-                            s_eta,
-                            s_j,
-                            s_q,
-                            s_j,
-                            s_q,
-                            s_j,
-                            s_q,
-                            s_v,
-                            s_pi,
-                            s_v,
-                            s_pi,
-                            s_v,
-                            s_v,
-                            s_v,
-                            s_m,
-                            s_m,
-                            s_m,
-                        ]
-                    ),
+                    np.diag([
+                        s_rho,
+                        s_e,
+                        s_eta,
+                        s_j,
+                        s_q,
+                        s_j,
+                        s_q,
+                        s_j,
+                        s_q,
+                        s_v,
+                        s_pi,
+                        s_v,
+                        s_pi,
+                        s_v,
+                        s_v,
+                        s_v,
+                        s_m,
+                        s_m,
+                        s_m,
+                    ]),
                     dtype=self.precisionPolicy.compute_dtype,
                 ),
                 self.s_rho,
@@ -1377,9 +1298,7 @@ class MultiphaseMRT(Multiphase):
         if not isinstance(value, list):
             raise ValueError("Matrix M must be a list")
         if len(value) != self.n_components:
-            raise ValueError(
-                "Number of components does not match number of matrix M passed"
-            )
+            raise ValueError("Number of components does not match number of matrix M passed")
         else:
             self._M = value
 
@@ -1391,27 +1310,17 @@ class MultiphaseMRT(Multiphase):
         )
         c = jnp.transpose(self.c)
         if isinstance(self.lattice, LatticeD2Q9):
-            tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(
-                self.G_ff * (psi_s - psi), c[:, i] * c[:, j]
-            )
-            tm2 = lambda i, j, psi, psi_s: jnp.dot(
-                self.G_ff * (psi_s**2 - psi**2), c[:, i] * c[:, j]
-            )
+            tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(self.G_ff * (psi_s - psi), c[:, i] * c[:, j])
+            tm2 = lambda i, j, psi, psi_s: jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, i] * c[:, j])
 
             def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
                 C = jnp.zeros_like(
                     psi_s,
                     dtype=self.precisionPolicy.compute_dtype,
                 )
-                qxx = -kappa * (
-                    (1 - A) * tm1(0, 0, psi, psi_s) + 0.5 * A * tm2(0, 0, psi, psi_s)
-                )
-                qxy = -kappa * (
-                    (1 - A) * tm1(0, 1, psi, psi_s) + 0.5 * A * tm2(0, 1, psi, psi_s)
-                )
-                qyy = -kappa * (
-                    (1 - A) * tm1(1, 1, psi, psi_s) + 0.5 * A * tm2(1, 1, psi, psi_s)
-                )
+                qxx = -kappa * ((1 - A) * tm1(0, 0, psi, psi_s) + 0.5 * A * tm2(0, 0, psi, psi_s))
+                qxy = -kappa * ((1 - A) * tm1(0, 1, psi, psi_s) + 0.5 * A * tm2(0, 1, psi, psi_s))
+                qyy = -kappa * ((1 - A) * tm1(1, 1, psi, psi_s) + 0.5 * A * tm2(1, 1, psi, psi_s))
                 C = C.at[..., 1].set(1.5 * s_e * (qxx + qyy))
                 C = C.at[..., 2].set(-1.5 * s_eta * (qxx + qyy))
                 C = C.at[..., 7].set(-s_v * (qxx - qyy))
@@ -1419,9 +1328,7 @@ class MultiphaseMRT(Multiphase):
                 return C
 
             C_tree = map(
-                lambda kappa, A, s_v, s_e, s_eta, psi, psi_s: compute_C(
-                    kappa, A, s_v, s_e, s_eta, psi, psi_s
-                ),
+                lambda kappa, A, s_v, s_e, s_eta, psi, psi_s: compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s),
                 self.kappa,
                 list(self.A.diagonal()),
                 self.s_v,
@@ -1432,36 +1339,20 @@ class MultiphaseMRT(Multiphase):
             )
             return C_tree
         elif isinstance(self.lattice, LatticeD3Q19):
-            tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(
-                self.G_ff * (psi_s - psi), c[:, i] * c[:, j]
-            )
-            tm2 = lambda i, j, psi, psi_s: jnp.dot(
-                self.G_ff * (psi_s**2 - psi**2), c[:, i] * c[:, j]
-            )
+            tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(self.G_ff * (psi_s - psi), c[:, i] * c[:, j])
+            tm2 = lambda i, j, psi, psi_s: jnp.dot(self.G_ff * (psi_s**2 - psi**2), c[:, i] * c[:, j])
 
             def compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s):
                 C = jnp.zeros_like(
                     psi_s,
                     dtype=self.precisionPolicy.compute_dtype,
                 )
-                qxx = -kappa * (
-                    (1 - A) * tm1(0, 0, psi, psi_s) + 0.5 * A * tm2(0, 0, psi, psi_s)
-                )
-                qxy = -kappa * (
-                    (1 - A) * tm1(0, 1, psi, psi_s) + 0.5 * A * tm2(0, 1, psi, psi_s)
-                )
-                qxz = -kappa * (
-                    (1 - A) * tm1(0, 2, psi, psi_s) + 0.5 * A * tm2(0, 2, psi, psi_s)
-                )
-                qyy = -kappa * (
-                    (1 - A) * tm1(1, 1, psi, psi_s) + 0.5 * A * tm2(1, 1, psi, psi_s)
-                )
-                qyz = -kappa * (
-                    (1 - A) * tm1(1, 2, psi, psi_s) + 0.5 * A * tm2(1, 2, psi, psi_s)
-                )
-                qzz = -kappa * (
-                    (1 - A) * tm1(2, 2, psi, psi_s) + 0.5 * A * tm2(2, 2, psi, psi_s)
-                )
+                qxx = -kappa * ((1 - A) * tm1(0, 0, psi, psi_s) + 0.5 * A * tm2(0, 0, psi, psi_s))
+                qxy = -kappa * ((1 - A) * tm1(0, 1, psi, psi_s) + 0.5 * A * tm2(0, 1, psi, psi_s))
+                qxz = -kappa * ((1 - A) * tm1(0, 2, psi, psi_s) + 0.5 * A * tm2(0, 2, psi, psi_s))
+                qyy = -kappa * ((1 - A) * tm1(1, 1, psi, psi_s) + 0.5 * A * tm2(1, 1, psi, psi_s))
+                qyz = -kappa * ((1 - A) * tm1(1, 2, psi, psi_s) + 0.5 * A * tm2(1, 2, psi, psi_s))
+                qzz = -kappa * ((1 - A) * tm1(2, 2, psi, psi_s) + 0.5 * A * tm2(2, 2, psi, psi_s))
                 C = C.at[..., 1].set((2 / 5) * s_e * (qxx + qyy + qzz))
                 C = C.at[..., 9].set(-s_v * (2 * qxx - qyy - qzz))
                 C = C.at[..., 11].set(-s_v * (qyy - qzz))
@@ -1471,9 +1362,7 @@ class MultiphaseMRT(Multiphase):
                 return C
 
             C_tree = map(
-                lambda kappa, A, s_v, s_e, s_eta, psi, psi_s: compute_C(
-                    kappa, A, s_v, s_e, s_eta, psi, psi_s
-                ),
+                lambda kappa, A, s_v, s_e, s_eta, psi, psi_s: compute_C(kappa, A, s_v, s_e, s_eta, psi, psi_s),
                 self.kappa,
                 list(self.A.diagonal()),
                 self.s_v,
@@ -1537,9 +1426,7 @@ class MultiphaseMRT(Multiphase):
             self.S,
         )
         mout_tree = self.apply_force(mout_tree, meq_tree, rho_tree, u_tree)
-        fout_tree = map(
-            lambda m, Minv, C: jnp.dot(m + C, Minv), mout_tree, self.M_inv, C_tree
-        )
+        fout_tree = map(lambda m, Minv, C: jnp.dot(m + C, Minv), mout_tree, self.M_inv, C_tree)
         # fout_tree = self.apply_force(fout_tree, feq_tree, rho_tree, u_tree)
         return map(
             lambda fout: self.precisionPolicy.cast_to_output(fout),

@@ -24,24 +24,18 @@ class PoreDoublet(MultiphaseMRT):
 
         # Invading fluid
         rho = (1 - fraction) * rho_t * np.ones((self.nx, self.ny, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         # Displaced fluid
         rho = fraction * rho_t * np.ones((self.nx, self.ny, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -51,9 +45,7 @@ class PoreDoublet(MultiphaseMRT):
     def set_boundary_conditions(self):
         coord = np.array([(i, j) for i in range(self.nx) for j in range(self.ny)])
         _, yy = coord[:, 0], coord[:, 1]
-        poiseuille_profile = lambda x, x0, d, umax: np.maximum(
-            0.0, 4.0 * umax / (d**2) * ((x - x0) * d - (x - x0) ** 2)
-        )
+        poiseuille_profile = lambda x, x0, d, umax: np.maximum(0.0, 4.0 * umax / (d**2) * ((x - x0) * d - (x - x0) ** 2))
 
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
@@ -79,11 +71,7 @@ class PoreDoublet(MultiphaseMRT):
 
         # apply inlet equilibrium boundary condition at the left
         yy_inlet = yy.reshape(self.nx, self.ny)[tuple(inlet.T)]
-        rho_inlet = (
-            fraction
-            * rho_t
-            * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-        )
+        rho_inlet = fraction * rho_t * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         vel_inlet = np.zeros(inlet.shape, dtype=self.precisionPolicy.compute_dtype)
         vel_inlet[:, 0] = poiseuille_profile(
             yy_inlet,
@@ -100,11 +88,7 @@ class PoreDoublet(MultiphaseMRT):
                 vel_inlet,
             )
         )
-        rho_inlet = (
-            (1 - fraction)
-            * rho_t
-            * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-        )
+        rho_inlet = (1 - fraction) * rho_t * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         vel_inlet = np.zeros(inlet.shape, dtype=self.precisionPolicy.compute_dtype)
         vel_inlet[:, 0] = poiseuille_profile(
             yy_inlet,
@@ -124,11 +108,7 @@ class PoreDoublet(MultiphaseMRT):
 
         # Same at the outlet
         yy_outlet = yy.reshape(self.nx, self.ny)[tuple(outlet.T)]
-        rho_outlet = (
-            fraction
-            * rho_t
-            * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-        )
+        rho_outlet = fraction * rho_t * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         vel_outlet = np.zeros(outlet.shape, dtype=self.precisionPolicy.compute_dtype)
         vel_outlet[:, 0] = poiseuille_profile(
             yy_outlet,
@@ -145,11 +125,7 @@ class PoreDoublet(MultiphaseMRT):
                 vel_outlet,
             )
         )
-        rho_outlet = (
-            (1 - fraction)
-            * rho_t
-            * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-        )
+        rho_outlet = (1 - fraction) * rho_t * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         vel_outlet = np.zeros(outlet.shape, dtype=self.precisionPolicy.compute_dtype)
         vel_outlet[:, 0] = poiseuille_profile(
             yy_outlet,
@@ -175,9 +151,7 @@ class PoreDoublet(MultiphaseMRT):
     @partial(jit, static_argnums=(0,))
     def compute_pressure(self, rho_tree, psi_tree):
         def f(g_kk):
-            return reduce(
-                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
-            )
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
         return map(
             lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
@@ -263,9 +237,7 @@ if __name__ == "__main__":
     x = x.T
     y = y.T
     obstacle = ((x - nx // 2) / a) ** 2 + (((y - ny // 2) - offset) / b) ** 2 - 1
-    elliptical_channel = (
-        ((x - nx // 2) / (a + width)) ** 2 + ((y - ny // 2) / (b + width)) ** 2 - 1
-    )
+    elliptical_channel = ((x - nx // 2) / (a + width)) ** 2 + ((y - ny // 2) / (b + width)) ** 2 - 1
 
     mask = np.ones((nx, ny), dtype=int)
     mask[:, ny // 2 - width : ny // 2 + width // 2 + 1] = 0

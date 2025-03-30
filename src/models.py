@@ -46,9 +46,7 @@ class KBCSim(LBMBase):
 
     def __init__(self, **kwargs):
         if kwargs.get("lattice").name != "D3Q27" and kwargs.get("nz") > 0:
-            raise ValueError(
-                "KBC collision operator in 3D must only be used with D3Q27 lattice."
-            )
+            raise ValueError("KBC collision operator in 3D must only be used with D3Q27 lattice.")
         super().__init__(**kwargs)
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
@@ -68,9 +66,9 @@ class KBCSim(LBMBase):
             deltaS = self.fdecompose_shear_d3q27(fneq) * rho
         deltaH = fneq - deltaS
         invBeta = 1.0 / beta
-        gamma = invBeta - (2.0 - invBeta) * self.entropic_scalar_product(
-            deltaS, deltaH, feq
-        ) / (tiny + self.entropic_scalar_product(deltaH, deltaH, feq))
+        gamma = invBeta - (2.0 - invBeta) * self.entropic_scalar_product(deltaS, deltaH, feq) / (
+            tiny + self.entropic_scalar_product(deltaH, deltaH, feq)
+        )
 
         fout = f - beta * (2.0 * deltaS + gamma[..., None] * deltaH)
 
@@ -110,9 +108,9 @@ class KBCSim(LBMBase):
             deltaS = self.fdecompose_shear_d3q27(fneq) * rho
         deltaH = fneq - deltaS
         invBeta = 1.0 / beta
-        gamma = invBeta - (2.0 - invBeta) * self.entropic_scalar_product(
-            deltaS, deltaH, feq
-        ) / (tiny + self.entropic_scalar_product(deltaH, deltaH, feq))
+        gamma = invBeta - (2.0 - invBeta) * self.entropic_scalar_product(deltaS, deltaH, feq) / (
+            tiny + self.entropic_scalar_product(deltaH, deltaH, feq)
+        )
 
         f_kbc = f - beta * (2.0 * deltaS + gamma[..., None] * deltaH)
         fout = jnp.where(H_fout > H_fin, f_kbc, f_bgk)
@@ -283,9 +281,7 @@ class MRTSim(LBMBase):
             np.transpose(np.linalg.inv(kwargs.get("M"))),
             dtype=self.precisionPolicy.compute_dtype,
         )
-        self.M = jnp.array(
-            np.transpose(kwargs.get("M")), dtype=self.precisionPolicy.compute_dtype
-        )
+        self.M = jnp.array(np.transpose(kwargs.get("M")), dtype=self.precisionPolicy.compute_dtype)
         self.S = jnp.array(kwargs.get("S"), dtype=self.precisionPolicy.compute_dtype)
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))

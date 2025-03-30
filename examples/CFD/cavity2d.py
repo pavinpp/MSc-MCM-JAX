@@ -1,5 +1,5 @@
 """
-This example implements a 2D Lid-Driven Cavity Flow simulation using the lattice Boltzmann method (LBM). 
+This example implements a 2D Lid-Driven Cavity Flow simulation using the lattice Boltzmann method (LBM).
 The Lid-Driven Cavity Flow is a standard test case for numerical schemes applied to fluid dynamics, which involves fluid in a square cavity with a moving lid (top boundary).
 
 In this example you'll be introduced to the following concepts:
@@ -16,6 +16,7 @@ In this example you'll be introduced to the following concepts:
 4. Visualization: The simulation outputs data in VTK format for visualization. It also provides images of the velocity field and saves the boundary conditions at each time step. The data can be visualized using software like Paraview.
 
 """
+
 from jax import config
 import numpy as np
 import jax.numpy as jnp
@@ -29,12 +30,12 @@ from src.utils import *
 # Use 8 CPU devices
 # os.environ["XLA_FLAGS"] = '--xla_force_host_platform_device_count=8'
 
+
 class Cavity(KBCSim):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def set_boundary_conditions(self):
-
         # concatenate the indices of the left, right, and bottom walls
         walls = np.concatenate((self.boundingBoxIndices["left"], self.boundingBoxIndices["right"], self.boundingBoxIndices["bottom"]))
         # apply bounce back boundary condition to the walls
@@ -59,6 +60,7 @@ class Cavity(KBCSim):
         save_fields_vtk(timestep, fields)
         save_BCs_vtk(timestep, self.BCs, self.gridInfo)
 
+
 if __name__ == "__main__":
     precision = "f32/f32"
     lattice = LatticeD2Q9(precision)
@@ -75,21 +77,21 @@ if __name__ == "__main__":
 
     visc = prescribed_vel * clength / Re
     omega = 1.0 / (3.0 * visc + 0.5)
-    
+
     os.system("rm -rf ./*.vtk && rm -rf ./*.png")
 
     kwargs = {
-        'lattice': lattice,
-        'omega': omega,
-        'nx': nx,
-        'ny': ny,
-        'nz': 0,
-        'precision': precision,
-        'io_rate': 100,
-        'print_info_rate': 100,
-        'checkpoint_rate': checkpoint_rate,
-        'checkpoint_dir': checkpoint_dir,
-        'restore_checkpoint': False,
+        "lattice": lattice,
+        "omega": omega,
+        "nx": nx,
+        "ny": ny,
+        "nz": 0,
+        "precision": precision,
+        "io_rate": 100,
+        "print_info_rate": 100,
+        "checkpoint_rate": checkpoint_rate,
+        "checkpoint_dir": checkpoint_dir,
+        "restore_checkpoint": False,
     }
 
     sim = Cavity(**kwargs)

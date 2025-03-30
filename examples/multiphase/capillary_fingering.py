@@ -24,25 +24,19 @@ class CapillaryFingering(MultiphaseMRT):
         # Invading fluid
         rho = (1 - fraction) * rho_t * np.ones((self.nx, self.ny, 1))
         rho[0:Lx, :, :] = fraction * rho_t
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         # Displaced fluid
         rho = fraction * rho_t * np.ones((self.nx, self.ny, 1))
         rho[0:Lx, :, :] = (1 - fraction) * rho_t
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -57,12 +51,10 @@ class CapillaryFingering(MultiphaseMRT):
         # )
 
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate(
-            (
-                self.boundingBoxIndices["top"],
-                self.boundingBoxIndices["bottom"],
-            )
-        )
+        walls = np.concatenate((
+            self.boundingBoxIndices["top"],
+            self.boundingBoxIndices["bottom"],
+        ))
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
             BounceBack(
@@ -185,9 +177,7 @@ class CapillaryFingering(MultiphaseMRT):
     @partial(jit, static_argnums=(0,))
     def compute_pressure(self, rho_tree, psi_tree):
         def f(g_kk):
-            return reduce(
-                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
-            )
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
         return map(
             lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
@@ -280,13 +270,9 @@ if __name__ == "__main__":
     c1 = np.pi / 2
     c2 = np.pi - c1
     theta_1 = (np.pi / 2) * np.ones((nx, ny, 1))
-    theta_1[:, [0, ny - 1], 0] = (
-        c1  # The contact angles needs to be set at solid points only
-    )
+    theta_1[:, [0, ny - 1], 0] = c1  # The contact angles needs to be set at solid points only
     theta_2 = (np.pi / 2) * np.ones((nx, ny, 1))
-    theta_2[:, [0, ny - 1], 0] = (
-        c2  # The contact angles needs to be set for solid points only
-    )
+    theta_2[:, [0, ny - 1], 0] = c2  # The contact angles needs to be set for solid points only
 
     phi_1 = np.ones((nx, ny, 1))
     phi_2 = np.ones((nx, ny, 1))

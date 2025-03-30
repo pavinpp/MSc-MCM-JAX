@@ -30,9 +30,7 @@ class EOS:
         elif isinstance(value, list):
             self._R = value
         else:
-            raise ValueError(
-                "Gas constant must be int, float or a list (for a multi-component flows)"
-            )
+            raise ValueError("Gas constant must be int, float or a list (for a multi-component flows)")
 
     @property
     def T(self):
@@ -59,9 +57,7 @@ class EOS:
         elif isinstance(value, list):
             self._a = value
         else:
-            raise ValueError(
-                "EOS parameter a must be int, float or a list (for multi-component flows)"
-            )
+            raise ValueError("EOS parameter a must be int, float or a list (for multi-component flows)")
 
     @property
     def b(self):
@@ -76,9 +72,7 @@ class EOS:
         elif isinstance(value, list):
             self._b = value
         else:
-            raise ValueError(
-                "EOS parameter b must be int, float or a list (for multi-component flows)"
-            )
+            raise ValueError("EOS parameter b must be int, float or a list (for multi-component flows)")
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
@@ -135,9 +129,7 @@ class Redlich_Kwong(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
-        eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
-            a * rho**2
-        ) / (jnp.sqrt(self.T) * (1.0 + b * rho))
+        eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * rho**2) / (jnp.sqrt(self.T) * (1.0 + b * rho))
         return map(eos, self.a, self.b, self.R, rho_tree)
 
 
@@ -171,9 +163,7 @@ class Redlich_Kwong_Soave(EOS):
     @rks_omega.setter
     def rks_omega(self, value):
         if value is None:
-            raise ValueError(
-                "rks_omega value must be provided for using Redlich-Kwong EOS"
-            )
+            raise ValueError("rks_omega value must be provided for using Redlich-Kwong EOS")
         self._rks_omega = value
 
     def set_alpha(self):
@@ -184,12 +174,7 @@ class Redlich_Kwong_Soave(EOS):
             self.R,
         )
         self.alpha = map(
-            lambda rks_omega, Tc: (
-                1
-                + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2)
-                * (1 - jnp.sqrt(self.T / Tc))
-            )
-            ** 2,
+            lambda rks_omega, Tc: (1 + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2) * (1 - jnp.sqrt(self.T / Tc))) ** 2,
             self.rks_omega,
             Tc_tree,
         )
@@ -200,9 +185,7 @@ class Redlich_Kwong_Soave(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
-        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
-            a * alpha * rho**2
-        ) / (1.0 + b * rho)
+        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + b * rho)
         return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
 
 
@@ -236,9 +219,7 @@ class Peng_Robinson(EOS):
     @pr_omega.setter
     def pr_omega(self, value):
         if value is None:
-            raise ValueError(
-                "pr_omega value must be provided for using Peng-Robinson EOS"
-            )
+            raise ValueError("pr_omega value must be provided for using Peng-Robinson EOS")
         if isinstance(value, int) or isinstance(value, float):
             self._pr_omega = [value]
         if isinstance(value, list):
@@ -252,12 +233,7 @@ class Peng_Robinson(EOS):
             self.R,
         )
         self.alpha = map(
-            lambda pr_omega, Tc: (
-                1
-                + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2)
-                * (1 - jnp.sqrt(self.T / Tc))
-            )
-            ** 2,
+            lambda pr_omega, Tc: (1 + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2) * (1 - jnp.sqrt(self.T / Tc))) ** 2,
             self.pr_omega,
             Tc_tree,
         )
@@ -268,9 +244,7 @@ class Peng_Robinson(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
-        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (
-            a * alpha * rho**2
-        ) / (1.0 + 2 * b * rho - b**2 * rho**2)
+        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + 2 * b * rho - b**2 * rho**2)
         return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
 
 
@@ -304,7 +278,5 @@ class Carnahan_Starling(EOS):
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
-        eos = lambda a, R, rho, x: (
-            rho * R * self.T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)
-        ) - (a * rho**2)
+        eos = lambda a, R, rho, x: (rho * R * self.T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)) - (a * rho**2)
         return map(eos, self.a, self.R, rho_tree, x_tree)

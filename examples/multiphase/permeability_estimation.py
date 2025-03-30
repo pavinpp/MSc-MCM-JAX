@@ -58,9 +58,7 @@ class PorousMedia(MultiphaseBGK):
     def set_boundary_conditions(self):
         # apply inlet equilibrium boundary condition at the left
         inlet = self.boundingBoxIndices["left"]
-        rho_inlet = np.ones(
-            (inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype
-        )
+        rho_inlet = np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         self.BCs[0].append(
             Regularized(
                 tuple(inlet.T),
@@ -73,9 +71,7 @@ class PorousMedia(MultiphaseBGK):
 
         # Same at the outlet
         outlet = self.boundingBoxIndices["right"]
-        rho_outlet = 0.97 * np.ones(
-            (outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype
-        )
+        rho_outlet = 0.97 * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         self.BCs[0].append(
             Regularized(
                 tuple(outlet.T),
@@ -94,15 +90,13 @@ class PorousMedia(MultiphaseBGK):
         idx[:, 0] = id[0]
         idx[:, 1] = id[1]
         idx[:, 2] = id[2]
-        wall = np.concatenate(
-            (
-                idx,
-                self.boundingBoxIndices["top"],
-                self.boundingBoxIndices["bottom"],
-                self.boundingBoxIndices["front"],
-                self.boundingBoxIndices["back"],
-            )
-        )
+        wall = np.concatenate((
+            idx,
+            self.boundingBoxIndices["top"],
+            self.boundingBoxIndices["bottom"],
+            self.boundingBoxIndices["front"],
+            self.boundingBoxIndices["back"],
+        ))
         self.BCs[0].append(
             BounceBack(
                 tuple(wall.T),
@@ -122,9 +116,7 @@ class PorousMedia(MultiphaseBGK):
     @partial(jit, static_argnums=(0,))
     def compute_pressure(self, rho_tree, psi_tree):
         def f(g_kk):
-            return reduce(
-                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
-            )
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
         return map(
             lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,

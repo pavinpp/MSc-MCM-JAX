@@ -24,37 +24,23 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
 
         dist = np.sqrt((x - self.nx / 2 - 50) ** 2 + (y - self.ny / 2) ** 2)
 
-        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
-            2 * (dist - r) / width
-        )
+        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
 
         rho = rho.reshape((nx, ny, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
         return rho_tree, u_tree
 
     def set_boundary_conditions(self):
-        sphere_1 = (
-            (x - self.nx // 2) ** 2
-            + (y - self.ny // 2 + spacing // 2) ** 2
-            - R_grain**2
-        )
-        sphere_2 = (
-            (x - self.nx // 2) ** 2
-            + (y - self.ny // 2 - spacing // 2) ** 2
-            - R_grain**2
-        )
+        sphere_1 = (x - self.nx // 2) ** 2 + (y - self.ny // 2 + spacing // 2) ** 2 - R_grain**2
+        sphere_2 = (x - self.nx // 2) ** 2 + (y - self.ny // 2 - spacing // 2) ** 2 - R_grain**2
         ind_1 = np.array(np.where(sphere_1 <= 0)).T
         ind_2 = np.array(np.where(sphere_2 <= 0)).T
         ind = np.concatenate((ind_1, ind_2))
@@ -89,9 +75,7 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
         rho_east = rho[self.nx // 2 + offset, self.ny // 2, 0]
         rho_g_pred = 0.25 * (rho_north + rho_south + rho_west + rho_east)
         rho_l_pred = rho[self.nx // 2, self.ny // 2, 0]
-        print(
-            f"%Error Min: {(rho_g_pred - rho_g) * 100 / rho_g} Max: {(rho_l_pred - rho_l) * 100 / rho_l}"
-        )
+        print(f"%Error Min: {(rho_g_pred - rho_g) * 100 / rho_g} Max: {(rho_l_pred - rho_l) * 100 / rho_l}")
         print(f"Density: Min: {rho_g_pred} Max: {rho_l_pred}")
         print(f"Maxwell construction: Min: {rho_g} Max: {rho_l}")
         print(f"Spurious currents: {np.max(np.sqrt(np.sum(u**2, axis=-1)))}")
@@ -99,9 +83,7 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
         p_south = p[self.nx // 2, self.ny // 2 + offset, 0]
         p_west = p[self.nx // 2 - offset, self.ny // 2, 0]
         p_east = p[self.nx // 2 + offset, self.ny // 2, 0]
-        pressure_difference = p[self.nx // 2, self.ny // 2, 0] - 0.25 * (
-            p_north + p_south + p_west + p_east
-        )
+        pressure_difference = p[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
         print(f"Pressure difference: {pressure_difference}")
         save_fields_vtk(
             timestep,

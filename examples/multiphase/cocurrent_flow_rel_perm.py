@@ -27,16 +27,12 @@ class Channel2D(MultiphaseMRT):
         rho_tree = []
 
         rho = rho_c * np.ones((self.nx, self.ny, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -45,12 +41,10 @@ class Channel2D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate(
-            (
-                self.boundingBoxIndices["top"],
-                self.boundingBoxIndices["bottom"],
-            )
-        )
+        walls = np.concatenate((
+            self.boundingBoxIndices["top"],
+            self.boundingBoxIndices["bottom"],
+        ))
         walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
@@ -72,9 +66,7 @@ class Channel2D(MultiphaseMRT):
     @partial(jit, static_argnums=(0,))
     def compute_pressure(self, rho_tree, psi_tree):
         def f(g_kk):
-            return reduce(
-                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
-            )
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
         return map(
             lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
@@ -122,25 +114,19 @@ class CocurrentFlow(MultiphaseMRT):
         # Wetting fluid
         rho = fraction * rho_t * np.ones((self.nx, self.ny, 1))
         rho[:, self.ny // 2 - a : self.ny // 2 + a] = (1 - fraction) * rho_t
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         # Non-wetting fluid
         rho = (1 - fraction) * rho_t * np.ones((self.nx, self.ny, 1))
         rho[:, self.ny // 2 - a : self.ny // 2 + a] = fraction * rho_t
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -149,12 +135,10 @@ class CocurrentFlow(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate(
-            (
-                self.boundingBoxIndices["top"],
-                self.boundingBoxIndices["bottom"],
-            )
-        )
+        walls = np.concatenate((
+            self.boundingBoxIndices["top"],
+            self.boundingBoxIndices["bottom"],
+        ))
         walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
@@ -186,9 +170,7 @@ class CocurrentFlow(MultiphaseMRT):
     @partial(jit, static_argnums=(0,))
     def compute_pressure(self, rho_tree, psi_tree):
         def f(g_kk):
-            return reduce(
-                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
-            )
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
         return map(
             lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
@@ -233,9 +215,7 @@ class CocurrentFlow(MultiphaseMRT):
         S_nw = 2 * a / self.ny
         S_w = 1 - S_nw
 
-        Q_w = np.sum(u[self.nx // 2, :, 0][self.ny // 2 + a : self.ny]) + np.sum(
-            u[self.nx // 2, :, 0][0 : self.ny // 2 - a + 1]
-        )
+        Q_w = np.sum(u[self.nx // 2, :, 0][self.ny // 2 + a : self.ny]) + np.sum(u[self.nx // 2, :, 0][0 : self.ny // 2 - a + 1])
         Q_nw = np.sum(u[self.nx // 2, :, 0][self.ny // 2 - a + 1 : self.ny // 2 + a])
 
         # Compute the flow rate at the final timestep
@@ -377,9 +357,7 @@ if __name__ == "__main__":
         s_v = [1 / tau_nw, 1 / tau_w]
 
         file = open(f"Relative_permeability_channel_visc_ratio_{visc_ratio}.csv", "w")
-        file.write(
-            "Wetting phase saturation,Non-wettting phase saturation,Relative permeability (wetting),Relative Permeability (non-wetting)\n"
-        )
+        file.write("Wetting phase saturation,Non-wettting phase saturation,Relative permeability (wetting),Relative Permeability (non-wetting)\n")
         single_Q_nw = Single_Q_nw[i]
         single_Q_w = Single_Q_w[i]
         for a in [0, 5, 10, 15, 20, 25]:

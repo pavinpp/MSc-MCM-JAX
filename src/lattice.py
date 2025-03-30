@@ -107,9 +107,7 @@ class Lattice(object):
             return np.nonzero((np.abs(c[:, 0]) + np.abs(c[:, 1]) == 1))[0]
 
         elif self.d == 3:
-            return np.nonzero(
-                (np.abs(c[:, 0]) + np.abs(c[:, 1]) + np.abs(c[:, 2]) == 1)
-            )[0]
+            return np.nonzero((np.abs(c[:, 0]) + np.abs(c[:, 1]) + np.abs(c[:, 2]) == 1))[0]
 
     def construct_lattice_velocity(self):
         """

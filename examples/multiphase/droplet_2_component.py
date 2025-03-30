@@ -52,33 +52,23 @@ class Droplet2D(MultiphaseMRT):
         # Injected fluid
         rho_inside = (1 - fraction) * rho_t
         rho_outside = fraction * rho_t
-        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (
-            rho_inside - rho_outside
-        ) * np.tanh(2 * (dist - r) / width)
+        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((nx, ny, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         # Displaced fluid
         rho_inside = fraction * rho_t
         rho_outside = (1 - fraction) * rho_t
-        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (
-            rho_inside - rho_outside
-        ) * np.tanh(2 * (dist - r) / width)
+        rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((nx, ny, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -93,9 +83,7 @@ class Droplet2D(MultiphaseMRT):
     @partial(jit, static_argnums=(0,))
     def compute_pressure(self, rho_tree, psi_tree):
         def f(g_kk):
-            return reduce(
-                operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree)
-            )
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
         return map(
             lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
@@ -136,9 +124,7 @@ class Droplet2D(MultiphaseMRT):
         p_south = p_1[self.nx // 2, self.ny // 2 + offset, 0]
         p_west = p_1[self.nx // 2 - offset, self.ny // 2, 0]
         p_east = p_1[self.nx // 2 + offset, self.ny // 2, 0]
-        pressure_difference = p_2[self.nx // 2, self.ny // 2, 0] - 0.25 * (
-            p_north + p_south + p_west + p_east
-        )
+        pressure_difference = p_2[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
         print(f"Pressure difference for radius = {r}: {pressure_difference}")
         save_fields_vtk(
             timestep,

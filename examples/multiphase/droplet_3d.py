@@ -41,13 +41,9 @@ class Droplet3D(MultiphaseMRT):
 
         rho_tree = []
 
-        dist = np.sqrt(
-            (x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2 + (z - self.nz / 2) ** 2
-        )
+        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2 + (z - self.nz / 2) ** 2)
 
-        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
-            2 * (dist - r) / width
-        )
+        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
 
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
         rho = self.distributed_array_init(
@@ -89,13 +85,9 @@ class Droplet3D(MultiphaseMRT):
         rho_east = rho[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
         rho_front = rho[self.nx // 2, self.ny // 2, self.nz // 2 + offset, 0]
         rho_back = rho[self.nx // 2, self.ny // 2, self.nz // 2 - offset, 0]
-        rho_g_pred = (
-            rho_north + rho_south + rho_west + rho_east + rho_front + rho_back
-        ) / 6
+        rho_g_pred = (rho_north + rho_south + rho_west + rho_east + rho_front + rho_back) / 6
         rho_l_pred = rho[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-        print(
-            f"%Error Min: {(rho_g_pred - rho_g) * 100 / rho_g} Max: {(rho_l_pred - rho_l) * 100 / rho_l}"
-        )
+        print(f"%Error Min: {(rho_g_pred - rho_g) * 100 / rho_g} Max: {(rho_l_pred - rho_l) * 100 / rho_l}")
         print(f"Density: Min: {rho_g_pred} Max: {rho_l_pred}")
         print(f"Maxwell construction: Min: {rho_g} Max: {rho_l}")
         print(f"Spurious currents: {np.max(np.sqrt(np.sum(u**2, axis=-1)))}")
@@ -105,10 +97,7 @@ class Droplet3D(MultiphaseMRT):
         p_east = p[self.nx // 2 + offset, self.ny // 2, self.nz // 2, 0]
         p_front = p[self.nx // 2 - offset, self.ny // 2, self.nz // 2 + offset, 0]
         p_back = p[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
-        pressure_difference = (
-            p[self.nx // 2, self.ny // 2, self.nz // 2, 0]
-            - (p_north + p_south + p_west + p_east + p_front + p_back) / 6
-        )
+        pressure_difference = p[self.nx // 2, self.ny // 2, self.nz // 2, 0] - (p_north + p_south + p_west + p_east + p_front + p_back) / 6
         print(f"Pressure difference: {pressure_difference}")
         save_fields_vtk(
             timestep,

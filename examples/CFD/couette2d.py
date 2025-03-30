@@ -22,24 +22,16 @@ class Couette(BGKSim):
         super().__init__(**kwargs)
 
     def set_boundary_conditions(self):
-        walls = np.concatenate(
-            (self.boundingBoxIndices["top"], self.boundingBoxIndices["bottom"])
-        )
+        walls = np.concatenate((self.boundingBoxIndices["top"], self.boundingBoxIndices["bottom"]))
         self.BCs.append(BounceBack(tuple(walls.T), self.gridInfo, self.precisionPolicy))
 
         outlet = self.boundingBoxIndices["right"]
         inlet = self.boundingBoxIndices["left"]
 
-        rho_wall = np.ones(
-            (inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype
-        )
+        rho_wall = np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
         vel_wall = np.zeros(inlet.shape, dtype=self.precisionPolicy.compute_dtype)
         vel_wall[:, 0] = prescribed_vel
-        self.BCs.append(
-            EquilibriumBC(
-                tuple(inlet.T), self.gridInfo, self.precisionPolicy, rho_wall, vel_wall
-            )
-        )
+        self.BCs.append(EquilibriumBC(tuple(inlet.T), self.gridInfo, self.precisionPolicy, rho_wall, vel_wall))
 
         self.BCs.append(DoNothing(tuple(outlet.T), self.gridInfo, self.precisionPolicy))
 

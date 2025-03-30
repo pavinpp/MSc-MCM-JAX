@@ -76,9 +76,7 @@ class LBMBase(object):
 
         # Check for distributed mode
         if self.nDevices > jax.local_device_count():
-            print(
-                "WARNING: Running in distributed mode. Make sure that jax.distributed.initialize is called before performing any JAX computations."
-            )
+            print("WARNING: Running in distributed mode. Make sure that jax.distributed.initialize is called before performing any JAX computations.")
 
         self.c = self.lattice.c
         self.q = self.lattice.q
@@ -87,9 +85,7 @@ class LBMBase(object):
 
         # Set the checkpoint manager
         if self.checkpointRate > 0:
-            mngr_options = orb.CheckpointManagerOptions(
-                save_interval_steps=self.checkpointRate, max_to_keep=1
-            )
+            mngr_options = orb.CheckpointManagerOptions(save_interval_steps=self.checkpointRate, max_to_keep=1)
             # self.mngr = orb.CheckpointManager(self.checkpointDir, orb.PyTreeCheckpointer(), options=mngr_options)
             self.mngr = orb.CheckpointManager(self.checkpointDir, options=mngr_options)
         else:
@@ -101,18 +97,12 @@ class LBMBase(object):
         # This is done in order to accommodate the domain sharding per XLA device
         nx, ny, nz = kwargs.get("nx"), kwargs.get("ny"), kwargs.get("nz")
         if None in {nx, ny, nz}:
-            raise ValueError(
-                "nx, ny, and nz must be provided. For 2D examples, nz must be set to 0."
-            )
+            raise ValueError("nx, ny, and nz must be provided. For 2D examples, nz must be set to 0.")
         self.nx = nx
         if nx % self.nDevices:
             self.nx = nx + (self.nDevices - nx % self.nDevices)
             print(
-                colored(
-                    "WARNING: nx increased from {} to {} in order to accommodate domain sharding per XLA device.".format(
-                        nx, self.nx
-                    )
-                ),
+                colored("WARNING: nx increased from {} to {} in order to accommodate domain sharding per XLA device.".format(nx, self.nx)),
                 "yellow",
             )
         self.ny = ny
@@ -188,9 +178,7 @@ class LBMBase(object):
         if self.nz == 0 and value.name not in ["D2Q9"]:
             raise ValueError("For 2D simulations, lattice type must be LatticeD2Q9.")
         if self.nz != 0 and value.name not in ["D3Q19", "D3Q15", "D3Q27"]:
-            raise ValueError(
-                "For 3D simulations, lattice type must be LatticeD3Q19, or LatticeD3Q27."
-            )
+            raise ValueError("For 3D simulations, lattice type must be LatticeD3Q19, or LatticeD3Q27.")
 
         self._lattice = value
 
@@ -380,9 +368,7 @@ class LBMBase(object):
         }
         simulation_name = self.__class__.__name__
 
-        print(
-            colored(f"**** Simulation Parameters for {simulation_name} ****", "green")
-        )
+        print(colored(f"**** Simulation Parameters for {simulation_name} ****", "green"))
 
         header = f"{colored('Parameter', 'blue'):>30} | {colored('Value', 'yellow')}"
         print(header)
@@ -390,12 +376,8 @@ class LBMBase(object):
 
         for attr in attributes_to_show:
             value = getattr(self, attr, "Attribute not set")
-            descriptive_name = descriptive_names.get(
-                attr, attr
-            )  # Use the attribute name as a fallback
-            row = (
-                f"{colored(descriptive_name, 'blue'):>30} | {colored(value, 'yellow')}"
-            )
+            descriptive_name = descriptive_names.get(attr, attr)  # Use the attribute name as a fallback
+            row = f"{colored(descriptive_name, 'blue'):>30} | {colored(value, 'yellow')}"
             print(row)
 
     def _create_boundary_data(self):
@@ -408,9 +390,7 @@ class LBMBase(object):
         # Accumulate the indices of all BCs to create the grid mask with FALSE along directions that
         # stream into a boundary voxel.
         solid_halo_list = [np.array(bc.indices).T for bc in self.BCs if bc.isSolid]
-        solid_halo_voxels = (
-            np.unique(np.vstack(solid_halo_list), axis=0) if solid_halo_list else None
-        )
+        solid_halo_voxels = np.unique(np.vstack(solid_halo_list), axis=0) if solid_halo_list else None
 
         # Create the grid mask on each process
         start = time.time()
@@ -467,9 +447,7 @@ class LBMBase(object):
                 jnp.bool_,
                 init_val=True,
             )
-            grid_mask = grid_mask.at[
-                (slice(hw_x, -hw_x), slice(hw_y, -hw_y), slice(None))
-            ].set(False)
+            grid_mask = grid_mask.at[(slice(hw_x, -hw_x), slice(hw_y, -hw_y), slice(None))].set(False)
             if solid_halo_voxels is not None:
                 solid_halo_voxels = solid_halo_voxels.at[:, 0].add(hw_x)
                 solid_halo_voxels = solid_halo_voxels.at[:, 1].add(hw_y)
@@ -524,9 +502,7 @@ class LBMBase(object):
                 "bottom": np.array([[i, 0] for i in range(self.nx)], dtype=int),
                 "top": np.array([[i, self.ny - 1] for i in range(self.nx)], dtype=int),
                 "left": np.array([[0, i] for i in range(self.ny)], dtype=int),
-                "right": np.array(
-                    [[self.nx - 1, i] for i in range(self.ny)], dtype=int
-                ),
+                "right": np.array([[self.nx - 1, i] for i in range(self.ny)], dtype=int),
             }
 
             return bounding_box
@@ -541,11 +517,7 @@ class LBMBase(object):
                     dtype=int,
                 ),
                 "top": np.array(
-                    [
-                        [i, j, self.nz - 1]
-                        for i in range(self.nx)
-                        for j in range(self.ny)
-                    ],
+                    [[i, j, self.nz - 1] for i in range(self.nx) for j in range(self.ny)],
                     dtype=int,
                 ),
                 "left": np.array(
@@ -553,11 +525,7 @@ class LBMBase(object):
                     dtype=int,
                 ),
                 "right": np.array(
-                    [
-                        [self.nx - 1, j, k]
-                        for j in range(self.ny)
-                        for k in range(self.nz)
-                    ],
+                    [[self.nx - 1, j, k] for j in range(self.ny) for k in range(self.nz)],
                     dtype=int,
                 ),
                 "front": np.array(
@@ -565,11 +533,7 @@ class LBMBase(object):
                     dtype=int,
                 ),
                 "back": np.array(
-                    [
-                        [i, self.ny - 1, k]
-                        for i in range(self.nx)
-                        for k in range(self.nz)
-                    ],
+                    [[i, self.ny - 1, k] for i in range(self.nx) for k in range(self.nz)],
                     dtype=int,
                 ),
             }
@@ -614,9 +578,7 @@ class LBMBase(object):
             None, None: The default density and velocity, both None. This indicates that the actual values should be set elsewhere.
         """
         print("WARNING: Default initial conditions assumed: density = 1, velocity = 0")
-        print(
-            "         To set explicit initial density and velocity, use self.initialize_macroscopic_fields."
-        )
+        print("         To set explicit initial density and velocity, use self.initialize_macroscopic_fields.")
         return None, None
 
     def assign_fields_sharded(self):
@@ -646,9 +608,7 @@ class LBMBase(object):
             shape = (self.nx, self.ny, self.nz, self.lattice.q)
 
         if rho0 is None or u0 is None:
-            f = self.distributed_array_init(
-                shape, self.precisionPolicy.output_dtype, init_val=self.w
-            )
+            f = self.distributed_array_init(shape, self.precisionPolicy.output_dtype, init_val=self.w)
         else:
             f = self.initialize_populations(rho0, u0)
 
@@ -939,13 +899,9 @@ class LBMBase(object):
             return_fpost is False.
         """
         f_postcollision = self.collision(f_poststreaming)
-        f_postcollision = self.apply_bc(
-            f_postcollision, f_poststreaming, timestep, "PostCollision"
-        )
+        f_postcollision = self.apply_bc(f_postcollision, f_poststreaming, timestep, "PostCollision")
         f_poststreaming = self.streaming(f_postcollision)
-        f_poststreaming = self.apply_bc(
-            f_poststreaming, f_postcollision, timestep, "PostStreaming"
-        )
+        f_poststreaming = self.apply_bc(f_poststreaming, f_postcollision, timestep, "PostStreaming")
 
         if return_fpost:
             return f_poststreaming, f_postcollision
@@ -983,33 +939,21 @@ class LBMBase(object):
                 # restore_args = orb.checkpoint_utils.construct_restore_args(state, shardings)
                 try:
                     # f = self.mngr.restore(latest_step, restore_kwargs={'restore_args': restore_args})['f']
-                    f = self.mngr.restore(
-                        latest_step, args=orb.args.StandardSave(state)
-                    )["f"]
+                    f = self.mngr.restore(latest_step, args=orb.args.StandardSave(state))["f"]
                     print(f"Restored checkpoint at step {latest_step}.")
                 except ValueError:
-                    raise ValueError(
-                        f"Failed to restore checkpoint at step {latest_step}."
-                    )
+                    raise ValueError(f"Failed to restore checkpoint at step {latest_step}.")
 
                 start_step = latest_step + 1
                 if not (t_max > start_step):
-                    raise ValueError(
-                        f"Simulation already exceeded maximum allowable steps (t_max = {t_max}). Consider increasing t_max."
-                    )
+                    raise ValueError(f"Simulation already exceeded maximum allowable steps (t_max = {t_max}). Consider increasing t_max.")
         if self.computeMLUPS:
             start = time.time()
         # Loop over all time steps
         for timestep in range(start_step, t_max + 1):
-            io_flag = self.ioRate > 0 and (
-                timestep % self.ioRate == 0 or timestep == t_max
-            )
-            print_iter_flag = (
-                self.printInfoRate > 0 and timestep % self.printInfoRate == 0
-            )
-            checkpoint_flag = (
-                self.checkpointRate > 0 and timestep % self.checkpointRate == 0
-            )
+            io_flag = self.ioRate > 0 and (timestep % self.ioRate == 0 or timestep == t_max)
+            print_iter_flag = self.printInfoRate > 0 and timestep % self.printInfoRate == 0
+            checkpoint_flag = self.checkpointRate > 0 and timestep % self.checkpointRate == 0
 
             if io_flag:
                 # Update the macroscopic variables and save the previous values (for error computation)
@@ -1064,33 +1008,20 @@ class LBMBase(object):
             end = time.time()
             if self.dim == 2:
                 print(
-                    colored("Domain: ", "blue")
-                    + colored(f"{self.nx} x {self.ny}", "green")
+                    colored("Domain: ", "blue") + colored(f"{self.nx} x {self.ny}", "green")
                     if self.dim == 2
                     else colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
                 )
                 print(
-                    colored("Number of voxels: ", "blue")
-                    + colored(f"{self.nx * self.ny}", "green")
+                    colored("Number of voxels: ", "blue") + colored(f"{self.nx * self.ny}", "green")
                     if self.dim == 2
                     else colored(f"{self.nx * self.ny * self.nz}", "green")
                 )
-                print(
-                    colored("MLUPS: ", "blue")
-                    + colored(
-                        f"{self.nx * self.ny * t_max / (end - start) / 1e6}", "red"
-                    )
-                )
+                print(colored("MLUPS: ", "blue") + colored(f"{self.nx * self.ny * t_max / (end - start) / 1e6}", "red"))
 
             elif self.dim == 3:
-                print(
-                    colored("Domain: ", "blue")
-                    + colored(f"{self.nx} x {self.ny} x {self.nz}", "green")
-                )
-                print(
-                    colored("Number of voxels: ", "blue")
-                    + colored(f"{self.nx * self.ny * self.nz}", "green")
-                )
+                print(colored("Domain: ", "blue") + colored(f"{self.nx} x {self.ny} x {self.nz}", "green"))
+                print(colored("Number of voxels: ", "blue") + colored(f"{self.nx * self.ny * self.nz}", "green"))
                 print(
                     colored("MLUPS: ", "blue")
                     + colored(

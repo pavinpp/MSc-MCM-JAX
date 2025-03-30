@@ -21,23 +21,17 @@ from src.utils import save_fields_vtk
 class CapillaryRise2D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
         y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
-        rho_profile = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
-            2 * (y - L) / width
-        )
+        rho_profile = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (y - L) / width)
         rho = rho_g * np.ones((self.nx, self.ny, 1))
         rho[:, :, 0] = rho_profile
 
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree = []
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, 2))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u
-        )
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -46,43 +40,29 @@ class CapillaryRise2D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         left_wall = np.array(
-            [
-                [self.nx // 2 - channel_width // 2, i + offset]
-                for i in range(channel_height)
-            ],
+            [[self.nx // 2 - channel_width // 2, i + offset] for i in range(channel_height)],
             dtype=np.int32,
         )
         right_wall = np.array(
-            [
-                [self.nx // 2 + channel_width // 2, i + offset]
-                for i in range(channel_height)
-            ],
+            [[self.nx // 2 + channel_width // 2, i + offset] for i in range(channel_height)],
             dtype=np.int32,
         )
         outside_left_wall = np.array(
-            [
-                [nx // 2 - channel_width // 2 - 1, i + offset]
-                for i in range(channel_height)
-            ],
+            [[nx // 2 - channel_width // 2 - 1, i + offset] for i in range(channel_height)],
             dtype=np.int32,
         )
         outside_right_wall = np.array(
-            [
-                [nx // 2 + channel_width // 2 + 1, i + offset]
-                for i in range(channel_height)
-            ],
+            [[nx // 2 + channel_width // 2 + 1, i + offset] for i in range(channel_height)],
             dtype=np.int32,
         )
-        walls = np.concatenate(
-            (
-                left_wall,
-                right_wall,
-                outside_left_wall,
-                outside_right_wall,
-                self.boundingBoxIndices["top"],
-                self.boundingBoxIndices["bottom"],
-            )
-        )
+        walls = np.concatenate((
+            left_wall,
+            right_wall,
+            outside_left_wall,
+            outside_right_wall,
+            self.boundingBoxIndices["top"],
+            self.boundingBoxIndices["bottom"],
+        ))
         walls = tuple(walls.T)
         self.BCs[0].append(
             BounceBack(

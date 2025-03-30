@@ -55,15 +55,13 @@ class Cavity(KBCSim):
         )
 
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate(
-            (
-                self.boundingBoxIndices["left"],
-                self.boundingBoxIndices["right"],
-                self.boundingBoxIndices["front"],
-                self.boundingBoxIndices["back"],
-                self.boundingBoxIndices["bottom"],
-            )
-        )
+        walls = np.concatenate((
+            self.boundingBoxIndices["left"],
+            self.boundingBoxIndices["right"],
+            self.boundingBoxIndices["front"],
+            self.boundingBoxIndices["back"],
+            self.boundingBoxIndices["bottom"],
+        ))
         # apply bounce back boundary condition to the walls
         # self.BCs.append(BounceBackHalfway(tuple(walls.T), self.gridInfo, self.precisionPolicy))
         vel_wall = np.zeros(walls.shape, dtype=self.precisionPolicy.compute_dtype)
@@ -154,4 +152,3 @@ if __name__ == "__main__":
     }
     sim = Cavity(**kwargs)
     sim.run(niter_max)
-

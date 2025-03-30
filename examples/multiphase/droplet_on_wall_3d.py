@@ -20,14 +20,8 @@ from src.utils import save_fields_vtk
 
 class DropletOnWall3D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
-        dist = np.sqrt(
-            (x - self.nx / 2) ** 2
-            + (y - self.ny / 2) ** 2
-            + (z - self.nz / 2 - 100) ** 2
-        )
-        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(
-            2 * (dist - r) / width
-        )
+        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2 + (z - self.nz / 2 - 100) ** 2)
+        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
         # rho[ind[:, 0], ind[:, 1]] = 1.0
         rho = rho.reshape((nx, ny, nz, 1))
         rho = self.distributed_array_init(
