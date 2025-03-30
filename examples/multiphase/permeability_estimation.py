@@ -104,7 +104,14 @@ class PorousMedia(MultiphaseBGK):
             )
         )
         self.BCs[0].append(
-            BounceBack(tuple(wall.T), self.gridInfo, self.precisionPolicy)
+            BounceBack(
+                tuple(wall.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                theta[tuple(wall.T)],
+                phi[tuple(wall.T)],
+                delta_rho[tuple(wall.T)],
+            )
         )
 
     @partial(jit, static_argnums=(0,))
@@ -153,6 +160,10 @@ if __name__ == "__main__":
     ny = 256
     nz = 256
 
+    theta = (np.pi / 2) * np.ones((nx, ny, nz, 1))
+    phi = np.ones((nx, ny, nz, 1))
+    delta_rho = np.zeros((nx, ny, nz, 1))
+
     kwargs = {
         "n_components": 1,
         "lattice": LatticeD3Q19(precision),
@@ -160,7 +171,6 @@ if __name__ == "__main__":
         "ny": ny,
         "nz": nz,
         "g_kkprime": g_kkprime,
-        "g_ks": [0.0],
         "omega": [1.0],
         "precision": precision,
         "k": [0],
@@ -174,4 +184,4 @@ if __name__ == "__main__":
     }
     # os.system("rm -rf output*/ *.vtk")
     sim = PorousMedia(**kwargs)
-    sim.run(100000)
+    sim.run(50000)
