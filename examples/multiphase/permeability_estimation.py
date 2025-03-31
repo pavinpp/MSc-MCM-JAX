@@ -83,13 +83,11 @@ class PorousMedia(MultiphaseBGK):
         )
 
         # Wall boundary condition
-        geometry = h5py.File("./assets/374_09_03_256.mat", "r")
-        bin = np.array(geometry["bin"], dtype=int)
-        id = np.where(bin == 1.0)
-        idx = np.zeros((len(id[0]), 3), dtype=int)
-        idx[:, 0] = id[0]
-        idx[:, 1] = id[1]
-        idx[:, 2] = id[2]
+        ind = np.where(binary == 1.0)
+        idx = np.zeros((len(ind[0]), 3), dtype=int)
+        idx[:, 0] = ind[0]
+        idx[:, 1] = ind[1]
+        idx[:, 2] = ind[2]
         wall = np.concatenate((
             idx,
             self.boundingBoxIndices["top"],
@@ -151,6 +149,8 @@ if __name__ == "__main__":
     nx = 256
     ny = 256
     nz = 256
+    geometry = h5py.File("./assets/374_09_03_256.mat", "r")
+    binary = np.array(geometry["bin"], dtype=int)
 
     theta = (np.pi / 2) * np.ones((nx, ny, nz, 1))
     phi = np.ones((nx, ny, nz, 1))
