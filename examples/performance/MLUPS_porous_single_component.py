@@ -7,7 +7,6 @@ import operator
 import numpy as np
 
 from src.lattice import LatticeD3Q19
-from src.utils import save_fields_vtk
 
 from src.multiphase import MultiphaseBGK
 from src.boundary_conditions import BounceBack, Regularized
@@ -15,9 +14,9 @@ from src.boundary_conditions import BounceBack, Regularized
 from functools import partial
 from jax import jit, vmap
 from jax.tree import map, reduce
+
 import jax.numpy as jnp
 import h5py
-import time
 
 
 # Run on A5500 (24GB) and RTX8000 (48GB)
@@ -116,16 +115,23 @@ class PorousMedia(MultiphaseBGK):
 
 if __name__ == "__main__":
     g_kkprime = 0 * np.ones((1, 1))
-    nx = 256
-    ny = 256
-    nz = 256
+    # nx = 256
+    # ny = 256
+    # nz = 256
+    # geometry = h5py.File("./assets/374_09_03_256.mat", "r")
+    # binary = np.array(geometry["bin"], dtype=int)
+
+    # Obtained from https://github.com/cageo/Krzikalla-2012/
+    nx = 512
+    ny = 512
+    nz = 512
+    geometry = h5py.File("./assets/segmented-kongju.mat", "r")
+    bin = np.array(geometry["berea"], dtype=int)
+    bin = bin[0:nx, 0:ny, 0:nz]
 
     theta = (np.pi / 2) * np.ones((nx, ny, nz, 1))
     phi = np.ones((nx, ny, nz, 1))
     delta_rho = np.zeros((nx, ny, nz, 1))
-
-    geometry = h5py.File("./assets/374_09_03_256.mat", "r")
-    bin = np.array(geometry["bin"], dtype=int)
 
     Precision = ["f32/f16", "f32/f32", "f64/f16", "f64/f32", "f64/f64"]
     for precision in Precision:
