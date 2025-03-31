@@ -20,7 +20,7 @@ import h5py
 import time
 
 
-# Run on A5500 (24GB)
+# Run on A5500 (24GB) and RTX8000 (48GB)
 class PorousMedia(MultiphaseBGK):
     def initialize_macroscopic_fields(self):
         rho_tree = []
