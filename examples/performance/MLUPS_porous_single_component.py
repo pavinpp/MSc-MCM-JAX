@@ -72,7 +72,6 @@ class PorousMedia(MultiphaseBGK):
         )
 
         # Wall boundary condition
-        ind = np.where(binary == 1.0)
         idx = np.zeros((len(ind[0]), 3), dtype=int)
         idx[:, 0] = ind[0]
         idx[:, 1] = ind[1]
@@ -115,19 +114,21 @@ class PorousMedia(MultiphaseBGK):
 
 if __name__ == "__main__":
     g_kkprime = 0 * np.ones((1, 1))
-    # nx = 256
-    # ny = 256
-    # nz = 256
-    # geometry = h5py.File("./assets/374_09_03_256.mat", "r")
-    # binary = np.array(geometry["bin"], dtype=int)
+    nx = 300
+    ny = 300
+    nz = 300
+    geometry = h5py.File("./assets/574_05_480.mat", "r")
+    binary = np.array(geometry["bin"], dtype=int)
 
     # Obtained from https://github.com/cageo/Krzikalla-2012/
-    nx = 512
-    ny = 512
-    nz = 512
-    geometry = h5py.File("./assets/segmented-kongju.mat", "r")
-    binary = np.array(geometry["berea"], dtype=int)
+    # nx = 512
+    # ny = 512
+    # nz = 512
+    # geometry = h5py.File("./assets/segmented-kongju.mat", "r")
+    # binary = np.array(geometry["berea"], dtype=int)
+
     binary = binary[0:nx, 0:ny, 0:nz]
+    ind = np.where(binary == 1.0)
 
     theta = (np.pi / 2) * np.ones((nx, ny, nz, 1))
     phi = np.ones((nx, ny, nz, 1))
