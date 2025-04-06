@@ -33,7 +33,7 @@ class Droplet3D(MultiphaseMRT):
         rho_inside = rho_w_l
         rho_outside = rho_w_g
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
-        rho = rho.reshape((nx, ny, 1))
+        rho = rho.reshape((self.nx, self.ny, self.nz, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
             self.precisionPolicy.compute_dtype,
@@ -46,7 +46,7 @@ class Droplet3D(MultiphaseMRT):
         rho_inside = rho_c_g
         rho_outside = rho_c_l
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
-        rho = rho.reshape((nx, ny, 1))
+        rho = rho.reshape((self.nx, self.ny, self.nz, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
             self.precisionPolicy.compute_dtype,
@@ -142,7 +142,7 @@ class DropletOnWall3D(MultiphaseMRT):
         rho_inside = rho_w_l
         rho_outside = rho_w_g
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
-        rho = rho.reshape((nx, ny, 1))
+        rho = rho.reshape((self.nx, self.ny, self.nz, 1))
         rho = self.distributed_array_init(
             (self.nx, self.ny, self.nz, 1),
             self.precisionPolicy.compute_dtype,
