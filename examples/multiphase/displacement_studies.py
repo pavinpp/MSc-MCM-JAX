@@ -187,9 +187,9 @@ class DropletOnWall3D(MultiphaseMRT):
                 tuple(ind.T),
                 self.gridInfo,
                 self.precisionPolicy,
-                theta_w[tuple(ind.T)],
-                phi_w[tuple(ind.T)],
-                delta_rho_w[tuple(ind.T)],
+                theta_c[tuple(ind.T)],
+                phi_c[tuple(ind.T)],
+                delta_rho_c[tuple(ind.T)],
             )
         )
 
@@ -620,9 +620,9 @@ if __name__ == "__main__":
     nz = 256
 
     geometry = h5py.File("./assets/374_09_03_256.mat", "r")
-    bin = np.array(geometry["bin"], dtype=int)
-    id = np.where(bin == 1.0)
-    idx = np.zeros((len(id[0]), 3), dtype=int)
+    _bin = np.array(geometry["bin"], dtype=int)
+    ind = np.where(_bin == 1.0)
+    idx = np.zeros((len(ind[0]), 3), dtype=int)
     idx[:, 0] = id[0] + buffer
     idx[:, 1] = id[1]
     idx[:, 2] = id[2]
