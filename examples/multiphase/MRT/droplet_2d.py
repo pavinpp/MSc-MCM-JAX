@@ -16,22 +16,6 @@ from src.utils import save_fields_vtk
 from src.multiphase import MultiphaseMRT
 
 
-r = 30
-nx = 200
-ny = 200
-
-width = 3
-
-a = 9 / 49
-b = 2 / 21
-R = 1.0
-
-rho_l = 6.764470400
-rho_g = 0.838834226
-Tc = 0.5714285714
-T = 0.8 * Tc
-
-
 class Droplet2D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
         x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
@@ -107,6 +91,21 @@ if __name__ == "__main__":
     M[6, :] = (-5 * en**0 + 3 * en**2) * e[:, 1]
     M[7, :] = e[:, 0] ** 2 - e[:, 1] ** 2
     M[8, :] = e[:, 0] * e[:, 1]
+
+    r = 30
+    nx = 200
+    ny = 200
+
+    width = 3
+
+    a = 9 / 49
+    b = 2 / 21
+    R = 1.0
+
+    rho_l = 6.764470400
+    rho_g = 0.838834226
+    Tc = 0.5714285714
+    T = 0.8 * Tc
 
     s_rho = [0.0]
     s_e = [0.5]
