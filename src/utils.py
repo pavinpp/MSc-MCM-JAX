@@ -461,7 +461,7 @@ def consolidated_mask(rho_tree, solid_mask, rho_vapor, rho_liquid):
 
 def isosurface(c_mask):
     """
-    This functions returns a list of meshes using Pyvista's isosurface functionality for a given consolidated mask. The consolidated_mask has
+    Returns a list of meshes using Pyvista's isosurface functionality for a given consolidated mask. The consolidated_mask has
     minimum value of 1 (solid nodes) with increasing values representing all other components (2, 3 ... n_components). The meshes can be used to
     area and volume occupied by each component.
 

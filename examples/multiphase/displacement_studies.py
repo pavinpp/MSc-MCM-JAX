@@ -1,5 +1,5 @@
 """
-Relative permeability curve for a Berea sandstone. First the 2 component droplet case and 2 component droplet on wall case is
+Drainage simulation for a Berea sandstone. First the 2 component droplet case and 2 component droplet on wall case is
 performed for identifying the values of various parameters.
 
 The Berea sandstone geometry used in this paper is taken from Digital Rocks Portal:
