@@ -1434,7 +1434,7 @@ class MultiphaseMRT(Multiphase):
         )
 
 
-class MultiphaseCascaded(Multiphase):
+class MultiphaseCascade(Multiphase):
     """
     Cascaded LBM collision model transforms the distribution to central moments and then relaxation them. The central moments are obtained by first
     transforming distributions to raw-moment using transformation matrix similar to MRT model. The raw-moments are subsequently transformed to central
