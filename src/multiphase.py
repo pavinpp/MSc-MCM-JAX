@@ -1434,7 +1434,16 @@ class MultiphaseMRT(Multiphase):
         )
 
 
-class CascadedLBM(Multiphase):
+class MultiphaseCascaded(Multiphase):
+    """
+    Cascaded LBM collision model transforms the distribution to central moments and then relaxation them. The central moments are obtained by first
+    transforming distributions to raw-moment using transformation matrix similar to MRT model. The raw-moments are subsequently transformed to central
+    moments using shift-matrix. CLBM gives control over vapor diffusivity, binary diffusivity and Schmidt number, which is not possible using SRT model.
+
+    The current implementation is based on:
+    1. Fei, L. & Luo, K. H. Consistent forcing scheme in the cascaded lattice Boltzmann method. Phys. Rev. E 96, 053307 (2017).
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.sigma = kwargs.get("sigma")

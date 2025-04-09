@@ -12,7 +12,7 @@ import numpy as np
 
 from src.lattice import LatticeD2Q9
 from src.utils import save_fields_vtk
-from src.multiphase import CascadedLBM
+from src.multiphase import MultiphaseCascade
 
 import operator
 from functools import partial
@@ -21,7 +21,7 @@ from jax import vmap, jit
 from jax.tree import reduce, map
 
 
-class Droplet2D(CascadedLBM):
+class Droplet2D(MultiphaseCascade):
     def initialize_macroscopic_fields(self):
         x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
         y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
@@ -103,6 +103,16 @@ if __name__ == "__main__":
     e = LatticeD2Q9().c.T
     en = np.linalg.norm(e, axis=1)
 
+    # ex = np.array([0, 1, -1, 0, 0, 1, -1, 1, -1])
+    # ey = np.array([0, 0, 0, 1, -1, 1, -1, -1, 1])
+    # _e = np.zeros((9, 2))
+    # _e[:, 0] = ex
+    # _e[:, 1] = ey
+    # order = np.array([e.tolist().index((_e[i]).tolist()) for i in range(9)])
+    #
+    # lattice = LatticeD2Q9()
+    # lattice.e = _e.T
+
     # Cascaded LBM collision matrix
     M = np.array([
         [1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -129,8 +139,8 @@ if __name__ == "__main__":
     s_0 = [1.0]  # Mass conservation
     s_1 = [1.0]  # Fixed
     s_2 = [s2]
-    s_b = [1.6]
-    s_3 = [1.2]  # [(16 - 8 * s2) / (8 - s2)]  # No slip
+    s_b = [s2]
+    s_3 = [1.6]  # [(16 - 8 * s2) / (8 - s2)]  # No slip
     s_4 = [1.0]  # No slip
 
     G = -10 / 3
