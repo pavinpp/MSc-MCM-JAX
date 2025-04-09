@@ -8,15 +8,7 @@ import jax.numpy as jnp
 
 class EOS:
     """
-    Base class for all equation of state. By default isothermal temperature field is used, which requires specifying temperature T.
-
-    Parameters
-    ----------
-    temperature_field_type: string; valid values: "isothermal" or "thermal"
-    rho_tree: list[jax.numpy.ndarray]
-        Pytree of density fields.
-    T: jax.numpy.ndarray
-        Temperature fields.
+    Base class for all equation of state. By default isothermal temperature field is used, which requires specifying temperature T during initialization.
     """
 
     def __init__(self, temperature_field_type="isothermal", **kwargs):
@@ -110,6 +102,10 @@ class VanderWaal(EOS):
 
     Parameters
     ----------
+    a: float or list
+    b: float or list
+    R: float or list
+    T: float or jax.numpy.ndarray
 
     Reference
     ---------
@@ -142,6 +138,10 @@ class Redlich_Kwong(EOS):
 
     Parameters
     ----------
+    a: float or list
+    b: float or list
+    R: float or list
+    T: float or jax.numpy.ndarray
 
     Reference
     ---------
@@ -174,6 +174,10 @@ class Redlich_Kwong_Soave(EOS):
 
     Parameters
     ----------
+    a: float or list
+    b: float or list
+    R: float or list
+    T: float or jax.numpy.ndarray
 
     Reference
     ---------
@@ -229,6 +233,10 @@ class Peng_Robinson(EOS):
 
     Parameters
     ----------
+    a: float or list
+    b: float or list
+    R: float or list
+    T: float or jax.numpy.ndarray
 
     Reference
     ---------
@@ -290,6 +298,7 @@ class Carnahan_Starling(EOS):
     a: float or list
     b: float or list
     R: float or list
+    T: float or jax.numpy.ndarray
 
     Reference
     ---------
