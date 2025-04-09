@@ -1432,3 +1432,308 @@ class MultiphaseMRT(Multiphase):
             lambda fout: self.precisionPolicy.cast_to_output(fout),
             fout_tree,
         )
+
+
+class CascadedLBM(Multiphase):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sigma = kwargs.get("sigma")
+        self.s_0 = kwargs.get("s_0")
+        self.s_1 = kwargs.get("s_1")
+        self.s_b = kwargs.get("s_b")
+        self.s_2 = kwargs.get("s_2")
+        self.s_3 = kwargs.get("s_3")
+        self.s_4 = kwargs.get("s_4")
+        self.M_inv = map(
+            lambda M: jnp.array(
+                np.linalg.inv(M).T,
+                dtype=self.precisionPolicy.compute_dtype,
+            ),
+            kwargs.get("M"),
+        )
+        self.M = map(
+            lambda M: jnp.array(M.T, dtype=self.precisionPolicy.compute_dtype),
+            kwargs.get("M"),
+        )
+        self.S = map(
+            lambda s_0, s_1, s_b, s_2, s_3, s_4: jnp.array(
+                np.diag([s_0, s_1, s_1, s_b, s_2, s_2, s_3, s_3, s_4]),
+                dtype=self.precisionPolicy.compute_dtype,
+            ),
+            self.s_0,
+            self.s_1,
+            self.s_b,
+            self.s_2,
+            self.s_3,
+            self.s_4,
+        )
+
+    @property
+    def M(self):
+        return self._M
+
+    @M.setter
+    def M(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Matrix M must be a list")
+        if len(value) != self.n_components:
+            raise ValueError("Number of components does not match number of matrix M passed")
+        self._M = value
+
+    @partial(jit, static_argnums=(0,))
+    def compute_normals(self):
+        ns = jnp.dot(self.normal_weights * self.solid_mask_streamed_h, self.c_h)
+        return ns / jnp.sqrt(jnp.sum(ns**2, axis=-1, keepdims=True))
+
+    @partial(jit, static_argnums=(0,))
+    def compute_central_moment(self, m_tree, u_tree):
+        if self.lattice.d == 2:
+
+            def f(m, u):
+                ux = u[..., 0]
+                uy = u[..., 1]
+                usq = ux**2 + uy**2
+                udiff = ux**2 - uy**2
+                T = jnp.zeros_like(m)
+                T = T.at[..., 0].set(m[..., 0])
+                T = T.at[..., 1].set(-ux * m[..., 0] + m[..., 1])
+                T = T.at[..., 2].set(-uy * m[..., 0] + m[..., 2])
+                T = T.at[..., 3].set(usq * m[..., 0] - 2 * ux * m[..., 1] - 2 * uy * m[..., 2] + m[..., 3])
+                T = T.at[..., 4].set(udiff * m[..., 0] - 2 * ux * m[..., 1] + 2 * uy * m[..., 2] + m[..., 4])
+                T = T.at[..., 5].set(ux * uy * m[..., 0] - uy * m[..., 1] - ux * m[..., 2] + m[..., 5])
+                T = T.at[..., 6].set(
+                    -(ux**2) * uy * m[..., 0]
+                    + 2 * ux * uy * m[..., 1]
+                    + ux**2 * m[..., 2]
+                    - 0.5 * uy * m[..., 3]
+                    - 0.5 * uy * m[..., 4]
+                    - 2 * ux * m[..., 5]
+                    + m[..., 6]
+                )
+                T = T.at[..., 7].set(
+                    -(uy**2) * ux * m[..., 0]
+                    + uy**2 * m[..., 1]
+                    + 2 * ux * uy * m[..., 2]
+                    - 0.5 * ux * m[..., 3]
+                    + 0.5 * ux * m[..., 4]
+                    - 2 * uy * m[..., 5]
+                    + m[..., 7]
+                )
+                T = T.at[..., 8].set(
+                    (uy**2 * ux**2) * m[..., 0]
+                    - 2 * ux * uy**2 * m[..., 1]
+                    - 2 * uy * ux**2 * m[..., 2]
+                    + 0.5 * usq * m[..., 3]
+                    - 0.5 * udiff * m[..., 4]
+                    + 4 * ux * uy * m[..., 5]
+                    - 2 * uy * m[..., 6]
+                    - 2 * ux * m[..., 7]
+                    + m[..., 8]
+                )
+                return T
+
+            return map(lambda m, u: f(m, u), m_tree, u_tree)
+
+    @partial(jit, static_argnums=(0,))
+    def compute_central_moment_inverse(self, T_tree, u_tree):
+        if self.lattice.d == 2:
+
+            def f(T, u):
+                ux = u[..., 0]
+                uy = u[..., 1]
+                usq = ux**2 + uy**2
+                udiff = ux**2 - uy**2
+                m = jnp.zeros_like(T)
+                m = m.at[..., 0].set(T[..., 0])
+                m = m.at[..., 1].set(ux * T[..., 0] + T[..., 1])
+                m = m.at[..., 2].set(uy * T[..., 0] + T[..., 2])
+                m = m.at[..., 3].set(usq * T[..., 0] + 2 * ux * T[..., 1] + 2 * uy * T[..., 2] + T[..., 3])
+                m = m.at[..., 4].set(udiff * T[..., 0] + 2 * ux * T[..., 1] - 2 * uy * T[..., 2] + T[..., 4])
+                m = m.at[..., 5].set(ux * uy * T[..., 0] + uy * T[..., 1] + ux * T[..., 2] + T[..., 5])
+                m = m.at[..., 6].set(
+                    (ux**2) * uy * T[..., 0]
+                    + 2 * ux * uy * T[..., 1]
+                    + ux**2 * T[..., 2]
+                    + 0.5 * uy * T[..., 3]
+                    + 0.5 * uy * T[..., 4]
+                    + 2 * ux * T[..., 5]
+                    + T[..., 6]
+                )
+                m = m.at[..., 7].set(
+                    (uy**2) * ux * T[..., 0]
+                    + uy**2 * T[..., 1]
+                    + 2 * ux * uy * T[..., 2]
+                    + 0.5 * ux * T[..., 3]
+                    - 0.5 * ux * T[..., 4]
+                    + 2 * uy * T[..., 5]
+                    + T[..., 7]
+                )
+                m = m.at[..., 8].set(
+                    (uy**2 * ux**2) * T[..., 0]
+                    + 2 * ux * uy**2 * T[..., 1]
+                    + 2 * uy * ux**2 * T[..., 2]
+                    + 0.5 * usq * T[..., 3]
+                    - 0.5 * udiff * T[..., 4]
+                    + 4 * ux * uy * T[..., 5]
+                    + 2 * uy * T[..., 6]
+                    + 2 * ux * T[..., 7]
+                    + T[..., 8]
+                )
+                return m
+
+            return map(lambda T, u: f(T, u), T_tree, u_tree)
+
+    @partial(jit, static_argnums=(0,))
+    def compute_eq_central_moments(self, rho_tree):
+        """
+        Calculate the central moments of the equilibrium distribution.
+
+        Parameters:
+        ----------
+        rho_tree: pytree of jax.numpy.ndarray
+            Pytree of density field for all components.
+
+        Returns:
+        -------
+        T_eq: pytree of jax.numpy.ndarray
+            Pytree of central moments of the equilibrium distribution.
+        """
+
+        def f(rho):
+            if self.lattice.d == 2:
+                T_eq = jnp.zeros(
+                    (self.nx, self.ny, self.lattice.q),
+                    dtype=self.precisionPolicy.compute_dtype,
+                )
+                T_eq = T_eq.at[..., 0].set(rho[..., 0])
+                T_eq = T_eq.at[..., 3].set(2 * rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 8].set(rho[..., 0] * self.lattice.cs**4)
+
+                return T_eq
+
+        return map(lambda rho: f(rho), rho_tree)
+
+    @partial(jit, static_argnums=(0,))
+    def compute_force_central_moments(self, F_tree, psi_tree):
+        """
+        Calculate the central moments of the force distribution. Includes modification to accurately replicate mechanical stability conditions.
+
+        Parameters:
+        ----------
+        F_tree: pytree of jax.numpy.ndarray
+            Pytree of force field for all components.
+        psi_tree: pytree of jax.numpy.ndarray
+            Pytree of potential field for all components.
+
+        Returns:
+        -------
+        T_eq: pytree of jax.numpy.ndarray
+            Pytree of central moments of the force distribution.
+        """
+
+        def f(F, sigma, psi, s_b):
+            if self.lattice.d == 2:
+                T_eq = jnp.zeros(
+                    (self.nx, self.ny, self.lattice.q),
+                    dtype=self.precisionPolicy.compute_dtype,
+                )
+                Fx = F[..., 0]
+                Fy = F[..., 1]
+                eta = 4 * sigma * (Fx**2 + Fy**2) / (psi[..., 0] ** 2 * (1 / s_b - 0.5))
+                T_eq = T_eq.at[..., 1].set(Fx)
+                T_eq = T_eq.at[..., 2].set(Fy)
+                T_eq = T_eq.at[..., 3].set(eta)
+                T_eq = T_eq.at[..., 6].set(Fy * self.lattice.cs2)
+                T_eq = T_eq.at[..., 7].set(Fx * self.lattice.cs2)
+                T_eq = T_eq.at[..., 8].set(eta * self.lattice.cs2)
+
+                return T_eq
+
+        return map(
+            lambda F, sigma, psi, s_b: f(F, sigma, psi, s_b),
+            F_tree,
+            self.sigma,
+            psi_tree,
+            self.s_b,
+        )
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def apply_force(self, Tdash_tree, rho_tree, u_tree):
+        """
+        Modified version of the apply_force defined in LBMBase to account for modified force.
+
+        Parameters
+        ----------
+        Tdash_tree: pytree of jax.numpy.ndarray
+            pytree of central moments post-collision distribution functions.
+        rho_tree: pytree of jax.numpy.ndarray
+            pytree of density field for all components.
+        u_tree: pytree of jax.numpy.ndarray
+            pytree of velocity field for all components.
+
+        Returns
+        -------
+        f_postcollision: jax.numpy.ndarray
+            The post-collision distribution functions with the force applied.
+        """
+        F_tree = self.compute_force(rho_tree)
+        psi_tree, _ = self.compute_potential(rho_tree)
+        C_tree = self.compute_force_central_moments(F_tree, psi_tree)
+        Tf_tree = map(
+            lambda S, C: jnp.dot(C, jnp.eye(self.lattice.q) - 0.5 * S),
+            self.S,
+            C_tree,
+        )
+        return map(lambda Tdash, Tf: Tdash + Tf, Tdash_tree, Tf_tree)
+
+    # @partial(jit, static_argnums=(0,), donate_argnums=(1,))
+    # def collision(self, fin_tree):
+    #     """
+    #     Cascaded LBM collision step for lattice.
+    #     """
+    #     fin_tree = map(lambda f: self.precisionPolicy.cast_to_compute(f), fin_tree)
+    #     rho_tree, u_tree = self.update_macroscopic(fin_tree)
+    #     T_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
+    #     N_tree = self.compute_shift_matrix(u_tree)
+    #     Tdash_tree = self.compute_central_moment(T_tree, N_tree)
+    #     Tdash_eq_tree = self.compute_eq_central_moments(rho_tree)
+    #     Tout_tree = map(
+    #         lambda Tdash, Tdash_eq, S: -jnp.dot(Tdash - Tdash_eq, S),
+    #         Tdash_tree,
+    #         Tdash_eq_tree,
+    #         self.S,
+    #     )
+    #     Tout_tree = self.apply_force(Tout_tree, Tdash_eq_tree, rho_tree, u_tree)
+    #     Ninv_tree = self.compute_shift_matrix_inverse(u_tree)
+    #     Tout_tree = self.compute_central_moment(Tout_tree, Ninv_tree)
+    #     fout_tree = map(
+    #         lambda fin, T, Minv: fin + jnp.dot(T, Minv), fin_tree, Tout_tree, self.M_inv
+    #     )
+    #     return map(
+    #         lambda fout: self.precisionPolicy.cast_to_output(fout),
+    #         fout_tree,
+    #     )
+
+    @partial(jit, static_argnums=(0,), donate_argnums=(1,))
+    def collision(self, fin_tree):
+        """
+        Cascaded LBM collision step for lattice.
+        """
+        fin_tree = map(lambda f: self.precisionPolicy.cast_to_compute(f), fin_tree)
+        rho_tree, u_tree = self.update_macroscopic(fin_tree)
+        T_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
+        Tdash_tree = self.compute_central_moment(T_tree, u_tree)
+        Tdash_eq_tree = self.compute_eq_central_moments(rho_tree)
+        Tout_tree = map(
+            lambda Tdash, Tdash_eq, S: jnp.dot(Tdash, jnp.eye(self.lattice.q) - S) + jnp.dot(Tdash_eq, S),
+            Tdash_tree,
+            Tdash_eq_tree,
+            self.S,
+        )
+        Tout_tree = self.apply_force(Tout_tree, rho_tree, u_tree)
+        Tout_tree = self.compute_central_moment_inverse(Tout_tree, u_tree)
+        fout_tree = map(lambda T, Minv: jnp.dot(T, Minv), Tout_tree, self.M_inv)
+        return map(
+            lambda fout: self.precisionPolicy.cast_to_output(fout),
+            fout_tree,
+        )
