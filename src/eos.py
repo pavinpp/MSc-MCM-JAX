@@ -8,14 +8,24 @@ import jax.numpy as jnp
 
 class EOS:
     """
-    Base class for all equation of state
+    Base class for all equation of state. By default isothermal temperature field is used, which requires specifying temperature T.
+
+    Parameters
+    ----------
+    temperature_field_type: string; valid values: "isothermal" or "thermal"
+    rho_tree: list[jax.numpy.ndarray]
+        Pytree of density fields.
+    T: jax.numpy.ndarray
+        Temperature fields.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, temperature_field_type="isothermal", **kwargs):
         self.a = kwargs.get("a")
         self.b = kwargs.get("b")
         self.R = kwargs.get("R")
-        self.T = kwargs.get("T")
+        self.temperature_field_type = temperature_field_type
+        if self.temperature_field_type == "isothermal":
+            self.T = kwargs.get("T")
 
     @property
     def R(self):
@@ -33,14 +43,25 @@ class EOS:
             raise ValueError("Gas constant must be int, float or a list (for a multi-component flows)")
 
     @property
+    def temperature_field_type(self):
+        return self.temperature_field_type
+
+    @temperature_field_type.setter
+    def temperature_field_type(self, value):
+        if value in ["isothermal", "thermal"]:
+            self._temperature_field_type = value
+        else:
+            raise ValueError("Invalid temperature_field_type, it can only be 'isothermal' or 'thermal'")
+
+    @property
     def T(self):
         return self._T
 
     @T.setter
     def T(self, value):
-        if value is None:
-            raise ValueError("Temperature value must be provided")
-        if value < 0:
+        if value is None and self.temperature_field_type == "isothermal":
+            raise ValueError("Temperature value must be provided for isothermal case")
+        if self.temperature_field_type == "isothermal" and value < 0:
             raise ValueError("Temperature cannot be negative")
         self._T = value
 
@@ -78,6 +99,10 @@ class EOS:
     def EOS(self, rho_tree):
         pass
 
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS_thermal(self, rho_tree, T):
+        pass
+
 
 class VanderWaal(EOS):
     """
@@ -105,6 +130,11 @@ class VanderWaal(EOS):
         eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - a * rho**2
         return map(eos, self.a, self.b, self.R, rho_tree)
 
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS_thermal(self, rho_tree, T):
+        eos = lambda a, b, R, rho: (rho * R * T) / (1.0 - b * rho) - a * rho**2
+        return map(eos, self.a, self.b, self.R, rho_tree)
+
 
 class Redlich_Kwong(EOS):
     """
@@ -130,6 +160,11 @@ class Redlich_Kwong(EOS):
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         eos = lambda a, b, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * rho**2) / (jnp.sqrt(self.T) * (1.0 + b * rho))
+        return map(eos, self.a, self.b, self.R, rho_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS_thermal(self, rho_tree, T):
+        eos = lambda a, b, R, rho: (rho * R * T) / (1.0 - b * rho) - (a * rho**2) / (jnp.sqrt(T) * (1.0 + b * rho))
         return map(eos, self.a, self.b, self.R, rho_tree)
 
 
@@ -166,27 +201,26 @@ class Redlich_Kwong_Soave(EOS):
             raise ValueError("rks_omega value must be provided for using Redlich-Kwong EOS")
         self._rks_omega = value
 
-    def set_alpha(self):
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS(self, rho_tree):
+        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + b * rho)
+        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS_thermal(self, rho_tree, T):
         Tc_tree = map(
             lambda a, b, R: (a / b) * (0.08664 / 0.42784) * (1 / R),
             self.a,
             self.b,
             self.R,
         )
-        self.alpha = map(
-            lambda rks_omega, Tc: (1 + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2) * (1 - jnp.sqrt(self.T / Tc))) ** 2,
+        alpha_tree = map(
+            lambda rks_omega, Tc: (1 + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2) * (1 - jnp.sqrt(T / Tc))) ** 2,
             self.rks_omega,
             Tc_tree,
         )
-
-    def set_temperature(self, T):
-        self.T = T
-        self.set_alpha()
-
-    @partial(jit, static_argnums=(0,), inline=True)
-    def EOS(self, rho_tree):
-        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + b * rho)
-        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
+        eos = lambda a, b, alpha, R, rho: (rho * R * T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + b * rho)
+        return map(eos, self.a, self.b, alpha_tree, self.R, rho_tree)
 
 
 class Peng_Robinson(EOS):
@@ -225,27 +259,26 @@ class Peng_Robinson(EOS):
         if isinstance(value, list):
             self._pr_omega = value
 
-    def set_alpha(self):
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS(self, rho_tree):
+        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + 2 * b * rho - b**2 * rho**2)
+        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS_thermal(self, rho_tree, T):
         Tc_tree = map(
             lambda a, b, R: (a / b) * (0.0778 / 0.45724) * (1 / R),
             self.a,
             self.b,
             self.R,
         )
-        self.alpha = map(
-            lambda pr_omega, Tc: (1 + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2) * (1 - jnp.sqrt(self.T / Tc))) ** 2,
+        alpha_tree = map(
+            lambda pr_omega, Tc: (1 + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2) * (1 - jnp.sqrt(T / Tc))) ** 2,
             self.pr_omega,
             Tc_tree,
         )
-
-    def set_temperature(self, T):
-        self.T = T
-        self.set_alpha()
-
-    @partial(jit, static_argnums=(0,), inline=True)
-    def EOS(self, rho_tree):
-        eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + 2 * b * rho - b**2 * rho**2)
-        return map(eos, self.a, self.b, self.alpha, self.R, rho_tree)
+        eos = lambda a, b, alpha, R, rho: (rho * R * T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + 2 * b * rho - b**2 * rho**2)
+        return map(eos, self.a, self.b, alpha_tree, self.R, rho_tree)
 
 
 class Carnahan_Starling(EOS):
@@ -272,11 +305,14 @@ class Carnahan_Starling(EOS):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_temperature(self, T):
-        self.T = T
-
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
         eos = lambda a, R, rho, x: (rho * R * self.T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)) - (a * rho**2)
+        return map(eos, self.a, self.R, rho_tree, x_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def EOS_thermal(self, rho_tree, T):
+        x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
+        eos = lambda a, R, rho, x: (rho * R * T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)) - (a * rho**2)
         return map(eos, self.a, self.R, rho_tree, x_tree)
