@@ -44,7 +44,7 @@ class EOS:
 
     @property
     def temperature_field_type(self):
-        return self.temperature_field_type
+        return self._temperature_field_type
 
     @temperature_field_type.setter
     def temperature_field_type(self, value):
