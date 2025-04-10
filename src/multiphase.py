@@ -1498,7 +1498,7 @@ class MultiphaseCascade(Multiphase):
     def compute_central_moment(self, m_tree, u_tree):
         if self.lattice.d == 2:
 
-            def f(m, u):
+            def shift(m, u):
                 ux = u[..., 0]
                 uy = u[..., 1]
                 usq = ux**2 + uy**2
@@ -1541,13 +1541,13 @@ class MultiphaseCascade(Multiphase):
                 )
                 return T
 
-            return map(lambda m, u: f(m, u), m_tree, u_tree)
+            return map(lambda m, u: shift(m, u), m_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
     def compute_central_moment_inverse(self, T_tree, u_tree):
         if self.lattice.d == 2:
 
-            def f(T, u):
+            def shift_inverse(T, u):
                 ux = u[..., 0]
                 uy = u[..., 1]
                 usq = ux**2 + uy**2
@@ -1590,7 +1590,7 @@ class MultiphaseCascade(Multiphase):
                 )
                 return m
 
-            return map(lambda T, u: f(T, u), T_tree, u_tree)
+            return map(lambda T, u: shift_inverse(T, u), T_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
     def compute_eq_central_moments(self, rho_tree):

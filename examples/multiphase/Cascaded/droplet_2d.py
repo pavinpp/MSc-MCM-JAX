@@ -133,7 +133,7 @@ if __name__ == "__main__":
     nx = 250
     ny = 250
 
-    width = 1
+    width = 3
 
     s2 = 1.4
     s_0 = [1.0]  # Mass conservation
