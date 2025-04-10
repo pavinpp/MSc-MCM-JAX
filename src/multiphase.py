@@ -535,9 +535,8 @@ class Multiphase(LBMBase):
     @partial(jit, static_argnums=(0,), inline=True)
     def macroscopic_velocity(self, f_tree, rho_tree):
         """
-        macroscopic_velocity computes the velocity and incorporates forces
-        using the Exact Difference Method (EDM). This is only used for
-        post-processing and not for equilibrium distribution computation.
+        macroscopic_velocity computes the velocity and incorporates forces into velocity for Exact Difference Method (EDM) (used for SRT and MRT collision) models
+        and the consistent forcing scheme developed by LinLin Fei et. al (for Cascaded LBM). This is used for post-processing only and not for equilibrium distribution computation.
 
         Parameters
         ----------
