@@ -205,6 +205,20 @@ class Redlich_Kwong_Soave(EOS):
             raise ValueError("rks_omega value must be provided for using Redlich-Kwong EOS")
         self._rks_omega = value
 
+    def set_alpha(self):
+        if self.temperature_field_type == "isothermal":
+            Tc_tree = map(
+                lambda a, b, R: (a / b) * (0.08664 / 0.42784) * (1 / R),
+                self.a,
+                self.b,
+                self.R,
+            )
+            self.alpha = map(
+                lambda rks_omega, Tc: (1 + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2) * (1 - jnp.sqrt(self.T / Tc))) ** 2,
+                self.rks_omega,
+                Tc_tree,
+            )
+
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
         eos = lambda a, b, alpha, R, rho: (rho * R * self.T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + b * rho)
@@ -266,6 +280,20 @@ class Peng_Robinson(EOS):
             self._pr_omega = [value]
         if isinstance(value, list):
             self._pr_omega = value
+
+    def set_alpha(self):
+        if self.temperature_field_type == "isothermal":
+            Tc_tree = map(
+                lambda a, b, R: (a / b) * (0.0778 / 0.45724) * (1 / R),
+                self.a,
+                self.b,
+                self.R,
+            )
+            self.alpha = map(
+                lambda pr_omega, Tc: (1 + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2) * (1 - jnp.sqrt(self.T / Tc))) ** 2,
+                self.pr_omega,
+                Tc_tree,
+            )
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS(self, rho_tree):
