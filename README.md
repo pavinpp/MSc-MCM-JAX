@@ -1,12 +1,82 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![GitHub star chart](https://img.shields.io/github/stars/Autodesk/XLB?style=social)](https://star-history.com/#Autodesk/XLB)
-<!-- <p align="center">
-  <img src="assets/logo-transparent.png" alt="" width="300">
-</p> -->
+# gEOS-LB: A Python-based, Accerelated, Differentiable Massively Parallel Lattice Boltzmann Library for Modeling Multiphase and Multiphysics Flows & Physics-Based Machine Learning
 
-# JLBM: A Differentiable Massively Parallel Lattice Boltzmann Library in Python for Physics-Based Machine Learning
+gEOS-LB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D Lattice Boltzmann Method (LBM) Python library that s built on top of the [JAX](https://github.com/google/jax) and is 
+specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool 
+for applications in physics-based machine learning. gEOS-LB is an extension of [XLB](https://github.com/Autodesk/XLB) and adds support multiphase and multiphysics flows to the original library.
 
-JLBM is a fully differentiable 2D/3D Lattice Boltzmann Method (LBM) library that leverages hardware acceleration. It's built on top of the [JAX](https://github.com/google/jax) library and is specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool for applications in physics-based machine learning. JLBM is an extension of [XLB](https://github.com/Autodesk/XLB)
+## Showcase
+
+## Key Features
+- **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
+- **Differentiable LBM Kernels:** gEOS-LB provides differentiable LBM kernels that can be used in differentiable physics and deep learning applications.
+- **Scalability:** gEOS-LB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
+- **Support for Various LBM Boundary Conditions and Kernels:** gEOS-LB supports several LBM boundary conditions and collision kernels.
+- **Support for Multiphase, Multiphysics and Multicomponent flows**: gEOS-LB can accurately model multiphysics and multiphase flows using Shan-Chen method, simulating complex interface dynamics without tracking any interface.
+- **User-Friendly Interface:** Written entirely in Python, gEOS-LB emphasizes a highly accessible interface that allows users to extend the library with ease and quickly set up and run new simulations.
+- **Leverages JAX Array and Shardmap:** The library incorporates the new JAX array unified array type and JAX shardmap, providing users with a numpy-like interface. This allows users to focus solely on the semantics, leaving performance optimizations to the compiler.
+- **Platform Versatility:** The same gEOS-LB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
+- **Visualization:** gEOS-LB provides a variety of visualization options including in-situ on GPU rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze).
+
+## Capabilities
+### Multiphase Flow Modeling
+**Shan-Chen** pseudopotential method with various modifications:
+- Support for **high density ratio flows** (tested for density ratios > 10^8) using improved forcing scheme.
+- Incorporates **Equation of State (EOS)** to model multiphase flows. Currently implemented EOS include **Carnahan-Starling**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong-Soave**
+and **VanderWaals**.
+- **Density ratio independent surface tension** control by directly modifying pressure tensor.
+- **Improved wetting scheme** to handle large range of contact angles ($5 - 170^\circ$) **without large spurious current or thick layers near solid surface**.
+### Multicomponent Flow Support
+gEOS-LB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any 
+user modification.
+
+### Collision Models
+- **BGK**
+- **Multi-Relaxation Time (MRT)**
+- **Cascaded Model**
+- **KBC**
+
+### Lattice
+- D2Q9
+- D3Q19
+- D3Q27
+
+### Machine Learning
+
+- Easy integration with JAX's ecosystem of machine learning libraries
+- Differentiable LBM kernels both for single and multiphase flows
+- Differentiable boundary conditions
+
+### Compute Capabilities
+- Distributed Multi-GPU support
+- Mixed-Precision support (store vs compute)
+- Out-of-core support (coming soon)
+
+### Output
+
+- Binary and ASCII VTK output (based on PyVista library)
+- In-situ rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze) library
+- [Orbax](https://github.com/google/orbax)-based distributed asynchronous checkpointing
+- Image Output
+- 3D mesh voxelizer using trimesh
+
+### Boundary conditions
+
+- **Equilibrium BC:** In this boundary condition, the fluid populations are assumed to be in at equilibrium. Can be used to set prescribed velocity or pressure.
+
+- **Full-Way Bounceback BC:** In this boundary condition, the velocity of the fluid populations is reflected back to the fluid side of the boundary, resulting in zero fluid velocity at the boundary.
+
+- **Half-Way Bounceback BC:** Similar to the Full-Way Bounceback BC, in this boundary condition, the velocity of the fluid populations is partially reflected back to the fluid side of the boundary, resulting in a non-zero fluid velocity at the boundary.
+
+- **Do Nothing BC:** In this boundary condition, the fluid populations are allowed to pass through the boundary without any reflection or modification.
+
+- **Zouhe BC:** This boundary condition is used to impose a prescribed velocity or pressure profile at the boundary.
+- **Regularized BC:** This boundary condition is used to impose a prescribed velocity or pressure profile at the boundary. This BC is more stable than Zouhe BC, but computationally more expensive.
+- **Extrapolation Outflow BC:** A type of outflow boundary condition that uses extrapolation to avoid strong wave reflections.
+
+- **Interpolated Bounceback BC:** Interpolated bounce-back boundary condition due to Bouzidi for a lattice Boltzmann method simulation.
+
+- **Convective Outflow BC**: Convective outflow boundary condition, useful for porous media flows.
 
 ## Accompanying Paper
 
@@ -27,23 +97,6 @@ If you use XLB in your research, please cite the following paper:
   publisher={Elsevier}
 }
 ``` -->
-
-## Key Features
-- **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
-- **Differentiable LBM Kernels:** XLB provides differentiable LBM kernels that can be used in differentiable physics and deep learning applications.
-- **Scalability:** XLB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
-- **Support for Various LBM Boundary Conditions and Kernels:** XLB supports several LBM boundary conditions and collision kernels.
-- **User-Friendly Interface:** Written entirely in Python, XLB emphasizes a highly accessible interface that allows users to extend the library with ease and quickly set up and run new simulations.
-- **Leverages JAX Array and Shardmap:** The library incorporates the new JAX array unified array type and JAX shardmap, providing users with a numpy-like interface. This allows users to focus solely on the semantics, leaving performance optimizations to the compiler.
-- **Platform Versatility:** The same XLB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
-- **Visualization:** XLB provides a variety of visualization options including in-situ on GPU rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze).
-
-### New Features added in this fork
-#### **Multicomponent & Multiphase flows**: 
-- **Arbitrary number of components** The library utilizes JAX's pytree functionality to model multiphase flows with arbitrary number of components.modeled using **Equation of State (EOS)**. 
-- Implemented EOS: **Carnahan-Starling**, **Shan-Chen**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong Soave** and **Van der Waals** with easy extension to any other arbitrary EOS.
-
-## Showcase
 
 
 <p align="center">
@@ -83,60 +136,6 @@ The stages of a fluid density field from an initial state to the emergence of th
 <p align="center">
   Lid-driven Cavity flow at Re=100,000 (~25 million cells)
 </p>
-
-## Capabilities 
-
-### LBM
-
-- BGK collision model (Standard LBM collision model)
-- KBC collision model (unconditionally stable for flows with high Reynolds number)
-
-#### Multicomponent and Multiphase flows
-
-- Shan-Chen pseudopotential method (BGK collision model)
-- Supports **arbitrary number of components** each modeled using **Equation of State (EOS)**.
-- Implemented EOS: **Carnahan-Starling**, **Shan-Chen**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong Soave** and **Van der Waals** with easy extension to any other arbitrary EOS.
-
-### Machine Learning
-
-- Easy integration with JAX's ecosystem of machine learning libraries
-- Differentiable LBM kernels both for single and multiphase flows
-- Differentiable boundary conditions
-
-### Lattice Models
-
-- D2Q9
-- D3Q19
-- D3Q27 (Must be used for KBC simulation runs)
-
-### Compute Capabilities
-- Distributed Multi-GPU support
-- Mixed-Precision support (store vs compute)
-- Out-of-core support (coming soon)
-
-### Output
-
-- Binary and ASCII VTK output (based on PyVista library)
-- In-situ rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze) library
-- [Orbax](https://github.com/google/orbax)-based distributed asynchronous checkpointing
-- Image Output
-- 3D mesh voxelizer using trimesh
-
-### Boundary conditions
-
-- **Equilibrium BC:** In this boundary condition, the fluid populations are assumed to be in at equilibrium. Can be used to set prescribed velocity or pressure.
-
-- **Full-Way Bounceback BC:** In this boundary condition, the velocity of the fluid populations is reflected back to the fluid side of the boundary, resulting in zero fluid velocity at the boundary.
-
-- **Half-Way Bounceback BC:** Similar to the Full-Way Bounceback BC, in this boundary condition, the velocity of the fluid populations is partially reflected back to the fluid side of the boundary, resulting in a non-zero fluid velocity at the boundary.
-
-- **Do Nothing BC:** In this boundary condition, the fluid populations are allowed to pass through the boundary without any reflection or modification.
-
-- **Zouhe BC:** This boundary condition is used to impose a prescribed velocity or pressure profile at the boundary.
-- **Regularized BC:** This boundary condition is used to impose a prescribed velocity or pressure profile at the boundary. This BC is more stable than Zouhe BC, but computationally more expensive.
-- **Extrapolation Outflow BC:** A type of outflow boundary condition that uses extrapolation to avoid strong wave reflections.
-
-- **Interpolated Bounceback BC:** Interpolated bounce-back boundary condition due to Bouzidi for a lattice Boltzmann method simulation.
 
 ## Installation Guide
 
@@ -178,8 +177,6 @@ python3 examples/CFD/cavity2d.py
  - 🌐 **Grid Refinement:** Implementing adaptive mesh refinement techniques for enhanced simulation accuracy.
 
 - ⚡ **Multi-GPU Acceleration using [Neon](https://github.com/Autodesk/Neon) + Warp:** Using Neon's data structure for improved scaling.
-
-- 💾 **Out-of-Core Computations:** Enabling simulations that exceed available GPU memory, suitable for CPU+GPU coherent memory models such as NVIDIA's Grace Superchips.
 
 - 🗜️ **GPU Accelerated Lossless Compression and Decompression**: Implementing high-performance lossless compression and decompression techniques for larger-scale simulations and improved performance.
 
