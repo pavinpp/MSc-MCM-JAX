@@ -161,7 +161,6 @@ if __name__ == "__main__":
         "ny": ny,
         "nz": nz,
         "g_kkprime": -1.0 * np.ones((1, 1)),
-        "g_ks": [0.0],
         "EOS": eos,
         "body_force": [0.0, 0.0, 0.0],
         "k": [0.27],

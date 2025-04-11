@@ -425,47 +425,47 @@ class Multiphase(LBMBase):
             G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         return jnp.array(G_ff, dtype=self.precisionPolicy.compute_dtype)
 
-    def compute_fs_greens_function(self):
-        """
-        Define the Green's function used to model interaction between kth fluid and solid.
-
-        During computation, this G_fs is multiplied with corresponding g_ks value to get the Green's function:
-        G_ks = self.g_ks[k] * self.G_fs
-
-        Green's function used in this case:
-        G_ks(x, x') = g1 * g_ks,       if |x - x'| = 1
-                    = g2 * g_ks,       if |x - x'| = sqrt(2)
-                    = 0,               otherwise
-
-        Here d is the dimension of problem and x' are the neighboring points.
-        For D2Q9:
-            g1 = 2 and g2 = 1/2
-        For D3Q19
-            g1 = 1 and g2 = 1/2
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        G_fs: jax.numpy.ndarray
-            Dimension: (q, )
-        """
-        c = np.array(self.lattice.c).T
-        cl = np.linalg.norm(c, axis=-1)
-        G_fs = np.zeros((self.q,), dtype=np.float64)
-        if isinstance(self.lattice, LatticeD2Q9):
-            g1 = 1 / 3
-            g2 = 1 / 12
-            G_fs[np.isclose(cl, 1.0, atol=1e-6)] = g1
-            G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
-        elif isinstance(self.lattice, LatticeD3Q19):
-            g1 = 1 / 6
-            g2 = 1 / 12
-            G_fs[np.isclose(cl, 1.0, atol=1e-6)] = g1
-            G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
-        return jnp.array(G_fs, dtype=self.precisionPolicy.compute_dtype)
+    # def compute_fs_greens_function(self):
+    #     """
+    #     Define the Green's function used to model interaction between kth fluid and solid.
+    #
+    #     During computation, this G_fs is multiplied with corresponding g_ks value to get the Green's function:
+    #     G_ks = self.g_ks[k] * self.G_fs
+    #
+    #     Green's function used in this case:
+    #     G_ks(x, x') = g1 * g_ks,       if |x - x'| = 1
+    #                 = g2 * g_ks,       if |x - x'| = sqrt(2)
+    #                 = 0,               otherwise
+    #
+    #     Here d is the dimension of problem and x' are the neighboring points.
+    #     For D2Q9:
+    #         g1 = 2 and g2 = 1/2
+    #     For D3Q19
+    #         g1 = 1 and g2 = 1/2
+    #
+    #     Parameters
+    #     ----------
+    #     None
+    #
+    #     Returns
+    #     -------
+    #     G_fs: jax.numpy.ndarray
+    #         Dimension: (q, )
+    #     """
+    #     c = np.array(self.lattice.c).T
+    #     cl = np.linalg.norm(c, axis=-1)
+    #     G_fs = np.zeros((self.q,), dtype=np.float64)
+    #     if isinstance(self.lattice, LatticeD2Q9):
+    #         g1 = 1 / 3
+    #         g2 = 1 / 12
+    #         G_fs[np.isclose(cl, 1.0, atol=1e-6)] = g1
+    #         G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+    #     elif isinstance(self.lattice, LatticeD3Q19):
+    #         g1 = 1 / 6
+    #         g2 = 1 / 12
+    #         G_fs[np.isclose(cl, 1.0, atol=1e-6)] = g1
+    #         G_fs[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+    #     return jnp.array(G_fs, dtype=self.precisionPolicy.compute_dtype)
 
     def assign_fields_sharded(self):
         """
@@ -1489,11 +1489,6 @@ class MultiphaseCascade(Multiphase):
         self._M = value
 
     @partial(jit, static_argnums=(0,))
-    def compute_normals(self):
-        ns = jnp.dot(self.normal_weights * self.solid_mask_streamed_h, self.c_h)
-        return ns / jnp.sqrt(jnp.sum(ns**2, axis=-1, keepdims=True))
-
-    @partial(jit, static_argnums=(0,))
     def compute_central_moment(self, m_tree, u_tree):
         if self.lattice.d == 2:
 
@@ -1609,10 +1604,7 @@ class MultiphaseCascade(Multiphase):
 
         def f(rho):
             if self.lattice.d == 2:
-                T_eq = jnp.zeros(
-                    (self.nx, self.ny, self.lattice.q),
-                    dtype=self.precisionPolicy.compute_dtype,
-                )
+                T_eq = jnp.zeros((self.nx, self.ny, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
                 T_eq = T_eq.at[..., 0].set(rho[..., 0])
                 T_eq = T_eq.at[..., 3].set(2 * rho[..., 0] * self.lattice.cs2)
                 T_eq = T_eq.at[..., 8].set(rho[..., 0] * self.lattice.cs**4)
@@ -1641,10 +1633,7 @@ class MultiphaseCascade(Multiphase):
 
         def f(F, sigma, psi, s_b):
             if self.lattice.d == 2:
-                T_eq = jnp.zeros(
-                    (self.nx, self.ny, self.lattice.q),
-                    dtype=self.precisionPolicy.compute_dtype,
-                )
+                T_eq = jnp.zeros((self.nx, self.ny, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
                 Fx = F[..., 0]
                 Fy = F[..., 1]
                 eta = 4 * sigma * (Fx**2 + Fy**2) / (psi[..., 0] ** 2 * (1 / s_b - 0.5))
@@ -1657,13 +1646,7 @@ class MultiphaseCascade(Multiphase):
 
                 return T_eq
 
-        return map(
-            lambda F, sigma, psi, s_b: f(F, sigma, psi, s_b),
-            F_tree,
-            self.sigma,
-            psi_tree,
-            self.s_b,
-        )
+        return map(lambda F, sigma, psi, s_b: f(F, sigma, psi, s_b), F_tree, self.sigma, psi_tree, self.s_b)
 
     @partial(jit, static_argnums=(0,), inline=True)
     def apply_force(self, Tdash_tree, rho_tree, u_tree):
@@ -1687,11 +1670,7 @@ class MultiphaseCascade(Multiphase):
         F_tree = self.compute_force(rho_tree)
         psi_tree, _ = self.compute_potential(rho_tree)
         C_tree = self.compute_force_central_moments(F_tree, psi_tree)
-        Tf_tree = map(
-            lambda S, C: jnp.dot(C, jnp.eye(self.lattice.q) - 0.5 * S),
-            self.S,
-            C_tree,
-        )
+        Tf_tree = map(lambda S, C: jnp.dot(C, jnp.eye(self.lattice.q) - 0.5 * S), self.S, C_tree)
         return map(lambda Tdash, Tf: Tdash + Tf, Tdash_tree, Tf_tree)
 
     # @partial(jit, static_argnums=(0,), donate_argnums=(1,))
@@ -1733,15 +1712,9 @@ class MultiphaseCascade(Multiphase):
         Tdash_tree = self.compute_central_moment(T_tree, u_tree)
         Tdash_eq_tree = self.compute_eq_central_moments(rho_tree)
         Tout_tree = map(
-            lambda Tdash, Tdash_eq, S: jnp.dot(Tdash, jnp.eye(self.lattice.q) - S) + jnp.dot(Tdash_eq, S),
-            Tdash_tree,
-            Tdash_eq_tree,
-            self.S,
+            lambda Tdash, Tdash_eq, S: jnp.dot(Tdash, jnp.eye(self.lattice.q) - S) + jnp.dot(Tdash_eq, S), Tdash_tree, Tdash_eq_tree, self.S
         )
         Tout_tree = self.apply_force(Tout_tree, rho_tree, u_tree)
         Tout_tree = self.compute_central_moment_inverse(Tout_tree, u_tree)
         fout_tree = map(lambda T, Minv: jnp.dot(T, Minv), Tout_tree, self.M_inv)
-        return map(
-            lambda fout: self.precisionPolicy.cast_to_output(fout),
-            fout_tree,
-        )
+        return map(lambda fout: self.precisionPolicy.cast_to_output(fout), fout_tree)
