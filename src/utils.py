@@ -422,7 +422,7 @@ def q_criterion(u):
     return norm_mu, q
 
 
-def consolidated_mask(rho_tree, solid_mask, rho_vapor, rho_liquid):
+def consolidated_mask(rho_tree, solid_indices, rho_vapor=None, rho_liquid=None):
     """
     Compute consolidate mask to identify all components and solid nodes in the domain. For single component system, it can be used
     to isolate vapor and liquid region, which requires a density threshold for liquid and vapor regions (rho_liquid, rho_vapor
@@ -431,7 +431,7 @@ def consolidated_mask(rho_tree, solid_mask, rho_vapor, rho_liquid):
     Parameters
     ----------
     rho_tree: list[numpy.ndarray]
-    solid_mask: numpy.ndarray
+    solid_indices: numpy.ndarray
     rho_vapor: float; Default: None
     rho_liquid: float; Default: None
 
@@ -443,17 +443,14 @@ def consolidated_mask(rho_tree, solid_mask, rho_vapor, rho_liquid):
     if (n_components < 2) and (rho_vapor is None):
         raise ValueError("Consolidated mask for single component system requires rho_vapor and rho_liquid")
         rho = rho_tree[0][..., 0]
-        c_mask = np.zeros_like(rho, dtype=int)
-        c_mask[rho <= rho_vapor] = 2
-        c_mask[rho > rho_vapor] = 3
-        c_mask[solid_mask == 1] = 1
+        c_mask = 2 * (rho <= rho_vapor) + 3 * (rho > rho_vapor)
+        c_mask = c_mask.at[solid_indices].set(1)
         return c_mask
     if n_components == 2:
         rho_1 = rho_tree[0][..., 0]
         rho_2 = rho_tree[1][..., 0]
-        c_mask = 2 * np.ones_like(rho_1, dtype=int)
-        c_mask[rho_1 <= rho_2] = 3
-        c_mask[solid_mask == 1] = 1
+        c_mask = 3 * (rho_1 <= rho_2) + 2 * (rho_1 > rho_2)
+        c_mask = c_mask.at[solid_indices].set(1)
         return c_mask
     else:
         raise NotImplementedError("For n_components > 2, consolidated mask computation has not been implemented")
