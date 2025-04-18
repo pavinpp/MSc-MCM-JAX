@@ -27,7 +27,7 @@ from src.boundary_conditions import (
     InterpolatedBounceBackBouzidi,
     InterpolatedBounceBackDifferentiable,
 )
-from src.lattice import LatticeD2Q9, LatticeD3Q19
+from src.lattice import LatticeD2Q9, LatticeD3Q19, LatticeD3Q27
 from src.base import LBMBase
 from src.utils import downsample_field
 
@@ -1442,6 +1442,7 @@ class MultiphaseCascade(Multiphase):
 
     The current implementation is based on:
     1. Fei, L. & Luo, K. H. Consistent forcing scheme in the cascaded lattice Boltzmann method. Phys. Rev. E 96, 053307 (2017).
+    2. Fei, L., Luo, K. H. & Li, Q. Three-dimensional cascaded lattice Boltzmann method: Improved implementation and consistent forcing scheme. Phys. Rev. E 97, 053309 (2018).
     """
 
     def __init__(self, **kwargs):
@@ -1464,18 +1465,43 @@ class MultiphaseCascade(Multiphase):
             lambda M: jnp.array(M.T, dtype=self.precisionPolicy.compute_dtype),
             kwargs.get("M"),
         )
-        self.S = map(
-            lambda s_0, s_1, s_b, s_2, s_3, s_4: jnp.array(
-                np.diag([s_0, s_1, s_1, s_b, s_2, s_2, s_3, s_3, s_4]),
-                dtype=self.precisionPolicy.compute_dtype,
-            ),
-            self.s_0,
-            self.s_1,
-            self.s_b,
-            self.s_2,
-            self.s_3,
-            self.s_4,
-        )
+        if isinstance(self.lattice, LatticeD2Q9):
+            self.S = map(
+                lambda s_0, s_1, s_b, s_2, s_3, s_4: jnp.array(
+                    np.diag([s_0, s_1, s_1, s_b, s_2, s_2, s_3, s_3, s_4]),
+                    dtype=self.precisionPolicy.compute_dtype,
+                ),
+                self.s_0,
+                self.s_1,
+                self.s_b,
+                self.s_2,
+                self.s_3,
+                self.s_4,
+            )
+        elif isinstance(self.lattice, LatticeD3Q19):
+            self.s_plus = map(lambda s_b, s_2: (s_b + 2 * s_2) / 3, self.s_b, self.s_2)
+            self.s_minus = map(lambda s_b, s_2: (s_b - s_2) / 3, self.s_b, self.s_2)
+
+            def S(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4):
+                S = np.diag([s_0, s_1, s_1, s_1, s_v, s_v, s_v, s_plus, s_plus, s_plus, s_3, s_3, s_3, s_3, s_3, s_3, s_4, s_4, s_4])
+                S[7, 8] = s_minus
+                S[7, 9] = s_minus
+                S[8, 7] = s_minus
+                S[8, 9] = s_minus
+                S[9, 7] = s_minus
+                S[9, 8] = s_minus
+                return jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
+
+            self.S = map(
+                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_4: S(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4),
+                self.s_0,
+                self.s_1,
+                self.s_v,
+                self.s_plus,
+                self.s_minus,
+                self.s_3,
+                self.s_4,
+            )
 
     @property
     def M(self):
@@ -1536,6 +1562,285 @@ class MultiphaseCascade(Multiphase):
                 )
                 return T
 
+        elif isinstance(self.lattice, LatticeD3Q19):
+
+            def shift(m, u):
+                ux = u[..., 0]
+                uy = u[..., 1]
+                uz = u[..., 2]
+                T = jnp.zeros_like(m)
+                T[..., 0] = T.at[..., 0].set(m[..., 0])
+                T[..., 1] = T.at[..., 1].set(-ux * m[..., 0] + m[..., 1])
+                T[..., 2] = T.at[..., 2].set(-uy * m[..., 0] + m[..., 2])
+                T[..., 3] = T.at[..., 3].set(-uz * m[..., 0] + m[..., 3])
+                T[..., 4] = T.at[..., 4].set(ux * uy * m[..., 0] - uy * m[..., 1] - ux * m[..., 2] + m[..., 4])
+                T[..., 5] = T.at[..., 5].set(ux * uz * m[..., 0] - uz * m[..., 1] - ux * m[..., 3] + m[..., 5])
+                T[..., 6] = T.at[..., 6].set(uy * uz * m[..., 0] - uz * m[..., 2] - uy * m[..., 3] + m[..., 6])
+                T[..., 7] = T.at[..., 7].set((ux**2) * m[..., 0] - 2 * ux * m[..., 1] + m[..., 7])
+                T[..., 8] = T.at[..., 8].set((uy**2) * m[..., 0] - 2 * uy * m[..., 2] + m[..., 8])
+                T[..., 9] = T.at[..., 9].set((uz**2) * m[..., 0] - 2 * uz * m[..., 3] + m[..., 9])
+                T[..., 10] = T.at[..., 10].set(
+                    -ux * (uy**2) * m[..., 0] + (uy**2) * m[..., 1] + 2 * ux * uy * m[..., 2] - 2 * uy * m[..., 4] - ux * m[..., 8] + m[..., 10]
+                )
+                T[..., 11] = T.at[..., 11].set(
+                    -ux * (uz**2) * m[..., 0] + (uz**2) * m[..., 1] + 2 * ux * uz * m[..., 3] - 2 * uz * m[..., 5] - ux * m[..., 9] + m[..., 11]
+                )
+                T[..., 12] = T.at[..., 12].set(
+                    -(ux**2) * uy * m[..., 0] + 2 * ux * uy * m[..., 1] + (ux**2) * m[..., 2] - 2 * ux * m[..., 4] - uy * m[..., 7] + m[..., 12]
+                )
+                T[..., 13] = T.at[..., 13].set(
+                    -(ux**2) * uz * m[..., 0] + 2 * ux * uz * m[..., 1] + (ux**2) * m[..., 3] - 2 * ux * m[..., 5] - uz * m[..., 7] + m[..., 13]
+                )
+                T[..., 14] = T.at[..., 14].set(
+                    -uy * (uz**2) * m[..., 0] + (uz**2) * m[..., 2] + 2 * uy * uz * m[..., 3] - 2 * uz * m[..., 6] - uy * m[..., 9] + m[..., 14]
+                )
+                T[..., 15] = T.at[..., 15].set(
+                    -(uy**2) * uz * m[..., 0] + 2 * uy * uz * m[..., 2] + (uy**2) * m[..., 3] - 2 * uy * m[..., 6] - uz * m[..., 8] + m[..., 15]
+                )
+                T[..., 16] = T.at[..., 16].set(
+                    (ux**2) * (uy**2) * m[..., 0]
+                    - 2 * ux * (uy**2) * m[..., 1]
+                    - 2 * uy * (ux**2) * m[..., 2]
+                    + 4 * ux * uy * m[..., 4]
+                    + (uy**2) * m[..., 7]
+                    + (ux**2) * m[..., 8]
+                    - 2 * ux * m[..., 10]
+                    - 2 * uy * m[..., 12]
+                    + m[..., 16]
+                )
+                T[..., 17] = T.at[..., 17].set(
+                    (ux**2) * (uz**2) * m[..., 0]
+                    - 2 * ux * (uz**2) * m[..., 1]
+                    - 2 * uz * (ux**2) * m[..., 3]
+                    + 4 * ux * uz * m[..., 5]
+                    + (uz**2) * m[..., 7]
+                    + (ux**2) * m[..., 9]
+                    - 2 * ux * m[..., 11]
+                    - 2 * uz * m[..., 13]
+                    + m[..., 17]
+                )
+                T[..., 18] = T.at[..., 18].set(
+                    (uy**2) * (uz**2) * m[..., 0]
+                    - 2 * uy * (uz**2) * m[..., 2]
+                    - 2 * uz * (uy**2) * m[..., 3]
+                    + 4 * uy * uz * m[..., 6]
+                    + (uz**2) * m[..., 8]
+                    + (uy**2) * m[..., 9]
+                    - 2 * uy * m[..., 14]
+                    - 2 * uz * m[..., 15]
+                    + m[..., 18]
+                )
+
+        elif isinstance(self.lattice, LatticeD3Q27):
+
+            def shift(m, u):
+                ux = u[..., 0]
+                uy = u[..., 1]
+                uz = u[..., 2]
+                T = jnp.zeros_like(m)
+                T = T.at[..., 0].set(m[..., 0])
+                T = T.at[..., 1].set(m[..., 1] - m[..., 0] * ux)
+                T = T.at[..., 2].set(m[..., 2] - m[..., 0] * uy)
+                T = T.at[..., 3].set(m[..., 3] - m[..., 0] * uz)
+                T = T.at[..., 4].set(m[..., 4] - m[..., 2] * ux - m[..., 1] * uy + m[..., 0] * ux * uy)
+                T = T.at[..., 5].set(m[..., 5] - m[..., 3] * ux - m[..., 1] * uz + m[..., 0] * ux * uz)
+                T = T.at[..., 6].set(m[..., 6] - m[..., 3] * uy - m[..., 2] * uz + m[..., 0] * uy * uz)
+                T = T.at[..., 7].set(m[..., 0] * ux**2 - 2 * m[..., 1] * ux + m[..., 7])
+                T = T.at[..., 8].set(m[..., 0] * uy**2 - 2 * m[..., 2] * uy + m[..., 8])
+                T = T.at[..., 9].set(m[..., 0] * uz**2 - 2 * m[..., 3] * uz + m[..., 9])
+                T = T.at[..., 10].set(
+                    m[..., 10] - m[..., 8] * ux - 2 * m[..., 4] * uy + m[..., 1] * uy**2 - m[..., 0] * ux * uy ^ 2 + 2 * m[..., 2] * ux * uy
+                )
+                T = T.at[..., 11].set(
+                    m[..., 11] - m[..., 9] * ux - 2 * m[..., 5] * uz + m[..., 1] * uz**2 - m[..., 0] * ux * uz ^ 2 + 2 * m[..., 3] * ux * uz
+                )
+                T = T.at[..., 12].set(
+                    m[..., 12] - 2 * m[..., 4] * ux - m[..., 7] * uy + m[..., 2] * ux**2 - m[..., 0] * ux ^ 2 * uy + 2 * m[..., 1] * ux * uy
+                )
+                T = T.at[..., 13].set(
+                    m[..., 13] - 2 * m[..., 5] * ux - m[..., 7] * uz + m[..., 3] * ux**2 - m[..., 0] * ux ^ 2 * uz + 2 * m[..., 1] * ux * uz
+                )
+                T = T.at[..., 14].set(
+                    m[..., 14] - m[..., 9] * uy - 2 * m[..., 6] * uz + m[..., 2] * uz**2 - m[..., 0] * uy * uz ^ 2 + 2 * m[..., 3] * uy * uz
+                )
+                T = T.at[..., 15].set(
+                    m[..., 15] - 2 * m[..., 6] * uy - m[..., 8] * uz + m[..., 3] * uy**2 - m[..., 0] * uy ^ 2 * uz + 2 * m[..., 2] * uy * uz
+                )
+                T = T.at[..., 16].set(
+                    m[..., 16]
+                    - m[..., 6] * ux
+                    - m[..., 5] * uy
+                    - m[..., 4] * uz
+                    + m[..., 3] * ux * uy
+                    + m[..., 2] * ux * uz
+                    + m[..., 1] * uy * uz
+                    - m[..., 0] * ux * uy * uz
+                )
+                T = T.at[..., 17].set(
+                    m[..., 0] * ux**2 * uy**2
+                    - 2 * m[..., 2] * ux**2 * uy
+                    + m[..., 8] * ux**2
+                    - 2 * m[..., 1] * ux * uy**2
+                    + 4 * m[..., 4] * ux * uy
+                    - 2 * m[..., 10] * ux
+                    + m[..., 7] * uy**2
+                    - 2 * m[..., 12] * uy
+                    + m[..., 17]
+                )
+                T = T.at[..., 18].set(
+                    m[..., 0] * ux**2 * uz**2
+                    - 2 * m[..., 3] * ux**2 * uz
+                    + m[..., 9] * ux**2
+                    - 2 * m[..., 1] * ux * uz**2
+                    + 4 * m[..., 5] * ux * uz
+                    - 2 * m[..., 11] * ux
+                    + m[..., 7] * uz**2
+                    - 2 * m[..., 13] * uz
+                    + m[..., 18]
+                )
+                T = T.at[..., 19].set(
+                    m[..., 0] * uy**2 * uz**2
+                    - 2 * m[..., 3] * uy**2 * uz
+                    + m[..., 9] * uy**2
+                    - 2 * m[..., 2] * uy * uz**2
+                    + 4 * m[..., 6] * uy * uz
+                    - 2 * m[..., 14] * uy
+                    + m[..., 8] * uz**2
+                    - 2 * m[..., 15] * uz
+                    + m[..., 19]
+                )
+                T = T.at[..., 20].set(
+                    m[..., 20]
+                    - 2 * m[..., 16] * ux
+                    - m[..., 13] * uy
+                    - m[..., 12] * uz
+                    + m[..., 6] * ux**2
+                    - m[..., 3] * ux**2 * uy
+                    - m[..., 2] * ux**2 * uz
+                    + 2 * m[..., 5] * ux * uy
+                    + 2 * m[..., 4] * ux * uz
+                    + m[..., 7] * uy * uz
+                    - 2 * m[..., 1] * ux * uy * uz
+                    + m[..., 0] * ux**2 * uy * uz
+                )
+                T = T.at[..., 21].set(
+                    m[..., 21]
+                    - m[..., 15] * ux
+                    - 2 * m[..., 16] * uy
+                    - m[..., 10] * uz
+                    + m[..., 5] * uy**2
+                    - m[..., 3] * ux * uy**2
+                    - m[..., 1] * uy**2 * uz
+                    + 2 * m[..., 6] * ux * uy
+                    + m[..., 8] * ux * uz
+                    + 2 * m[..., 4] * uy * uz
+                    - 2 * m[..., 2] * ux * uy * uz
+                    + m[..., 0] * ux * uy**2 * uz
+                )
+                T = T.at[..., 22].set(
+                    m[..., 22]
+                    - m[..., 14] * ux
+                    - m[..., 11] * uy
+                    - 2 * m[..., 16] * uz
+                    + m[..., 4] * uz**2
+                    - m[..., 2] * ux * uz**2
+                    - m[..., 1] * uy * uz**2
+                    + m[..., 9] * ux * uy
+                    + 2 * m[..., 6] * ux * uz
+                    + 2 * m[..., 5] * uy * uz
+                    - 2 * m[..., 3] * ux * uy * uz
+                    + m[..., 0] * ux * uy * uz**2
+                )
+                T = T.at[..., 23].set(
+                    m[..., 23]
+                    - m[..., 19] * ux
+                    - 2 * m[..., 22] * uy
+                    - 2 * m[..., 21] * uz
+                    + m[..., 11] * uy**2
+                    + m[..., 10] * uz**2
+                    - m[..., 9] * ux * uy**2
+                    - m[..., 8] * ux * uz**2
+                    - 2 * m[..., 4] * uy * uz**2
+                    - 2 * m[..., 5] * uy**2 * uz
+                    + m[..., 1] * uy**2 * uz**2
+                    + 2 * m[..., 14] * ux * uy
+                    + 2 * m[..., 15] * ux * uz
+                    + 4 * m[..., 16] * uy * uz
+                    - 4 * m[..., 6] * ux * uy * uz
+                    + 2 * m[..., 2] * ux * uy * uz**2
+                    + 2 * m[..., 3] * ux * uy**2 * uz
+                    - m[..., 0] * ux * uy**2 * uz**2
+                )
+                T = T.at[..., 24].set(
+                    m[..., 24]
+                    - 2 * m[..., 22] * ux
+                    - m[..., 18] * uy
+                    - 2 * m[..., 20] * uz
+                    + m[..., 14] * ux**2
+                    + m[..., 12] * uz**2
+                    - m[..., 9] * ux**2 * uy
+                    - 2 * m[..., 4] * ux * uz**2
+                    - 2 * m[..., 6] * ux**2 * uz
+                    - m[..., 7] * uy * uz**2
+                    + m[..., 2] * ux**2 * uz**2
+                    + 2 * m[..., 11] * ux * uy
+                    + 4 * m[..., 16] * ux * uz
+                    + 2 * m[..., 13] * uy * uz
+                    - 4 * m[..., 5] * ux * uy * uz
+                    + 2 * m[..., 1] * ux * uy * uz**2
+                    + 2 * m[..., 3] * ux**2 * uy * uz
+                    - m[..., 0] * ux**2 * uy * uz**2
+                )
+                T = T.at[..., 25].set(
+                    m[..., 25]
+                    - 2 * m[..., 21] * ux
+                    - 2 * m[..., 20] * uy
+                    - m[..., 17] * uz
+                    + m[..., 15] * ux**2
+                    + m[..., 13] * uy**2
+                    - 2 * m[..., 5] * ux * uy**2
+                    - 2 * m[..., 6] * ux**2 * uy
+                    - m[..., 8] * ux**2 * uz
+                    - m[..., 7] * uy**2 * uz
+                    + m[..., 3] * ux**2 * uy**2
+                    + 4 * m[..., 16] * ux * uy
+                    + 2 * m[..., 10] * ux * uz
+                    + 2 * m[..., 12] * uy * uz
+                    - 4 * m[..., 4] * ux * uy * uz
+                    + 2 * m[..., 1] * ux * uy**2 * uz
+                    + 2 * m[..., 2] * ux**2 * uy * uz
+                    - m[..., 0] * ux**2 * uy**2 * uz
+                )
+                T = T.at[..., 26].set(
+                    m[..., 0] * ux**2 * uy**2 * uz**2
+                    - 2 * m[..., 3] * ux**2 * uy**2 * uz
+                    + m[..., 9] * ux**2 * uy**2
+                    - 2 * m[..., 2] * ux**2 * uy * uz**2
+                    + 4 * m[..., 6] * ux**2 * uy * uz
+                    - 2 * m[..., 14] * ux**2 * uy
+                    + m[..., 8] * ux**2 * uz**2
+                    - 2 * m[..., 15] * ux**2 * uz
+                    + m[..., 19] * ux**2
+                    - 2 * m[..., 1] * ux * uy**2 * uz**2
+                    + 4 * m[..., 5] * ux * uy**2 * uz
+                    - 2 * m[..., 11] * ux * uy**2
+                    + 4 * m[..., 4] * ux * uy * uz**2
+                    - 8 * m[..., 16] * ux * uy * uz
+                    + 4 * m[..., 22] * ux * uy
+                    - 2 * m[..., 10] * ux * uz**2
+                    + 4 * m[..., 21] * ux * uz
+                    - 2 * m[..., 23] * ux
+                    + m[..., 7] * uy**2 * uz**2
+                    - 2 * m[..., 13] * uy**2 * uz
+                    + m[..., 18] * uy**2
+                    - 2 * m[..., 12] * uy * uz**2
+                    + 4 * m[..., 20] * uy * uz
+                    - 2 * m[..., 24] * uy
+                    + m[..., 17] * uz**2
+                    - 2 * m[..., 25] * uz
+                    + m[..., 26]
+                )
+
             return map(lambda m, u: shift(m, u), m_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
@@ -1585,6 +1890,287 @@ class MultiphaseCascade(Multiphase):
                 )
                 return m
 
+        elif isinstance(self.lattice, LatticeD3Q19):
+
+            def shift_inverse(T, u):
+                ux = u[..., 0]
+                uy = u[..., 1]
+                uz = u[..., 2]
+                m = jnp.zeros_like(T)
+                m[..., 0] = m.at[..., 0].set(T[..., 0])
+                m[..., 1] = m.at[..., 1].set(ux * T[..., 0] + T[..., 1])
+                m[..., 2] = m.at[..., 2].set(uy * T[..., 0] + T[..., 2])
+                m[..., 3] = m.at[..., 3].set(uz * T[..., 0] + T[..., 3])
+                m[..., 4] = m.at[..., 4].set(ux * uy * T[..., 0] + uy * T[..., 1] + ux * T[..., 2] + T[..., 4])
+                m[..., 5] = m.at[..., 5].set(ux * uz * T[..., 0] + uz * T[..., 1] + ux * T[..., 3] + T[..., 5])
+                m[..., 6] = m.at[..., 6].set(uy * uz * T[..., 0] + uz * T[..., 2] + uy * T[..., 3] + T[..., 6])
+                m[..., 7] = m.at[..., 7].set((ux**2) * T[..., 0] + 2 * ux * T[..., 1] + T[..., 7])
+                m[..., 8] = m.at[..., 8].set((uy**2) * T[..., 0] + 2 * uy * T[..., 2] + T[..., 8])
+                m[..., 9] = m.at[..., 9].set((uz**2) * T[..., 0] + 2 * uz * T[..., 3] + T[..., 9])
+                m[..., 10] = m.at[..., 10].set(
+                    +ux * (uy**2) * T[..., 0] + (uy**2) * T[..., 1] + 2 * ux * uy * T[..., 2] + 2 * uy * T[..., 4] + ux * T[..., 8] + T[..., 10]
+                )
+                m[..., 11] = m.at[..., 11].set(
+                    +ux * (uz**2) * T[..., 0] + (uz**2) * T[..., 1] + 2 * ux * uz * T[..., 3] + 2 * uz * T[..., 5] + ux * T[..., 9] + T[..., 11]
+                )
+                m[..., 12] = m.at[..., 12].set(
+                    +(ux**2) * uy * T[..., 0] + 2 * ux * uy * T[..., 1] + (ux**2) * T[..., 2] + 2 * ux * T[..., 4] + uy * T[..., 7] + T[..., 12]
+                )
+                m[..., 13] = m.at[..., 13].set(
+                    +(ux**2) * uz * T[..., 0] + 2 * ux * uz * T[..., 1] + (ux**2) * T[..., 3] + 2 * ux * T[..., 5] + uz * T[..., 7] + T[..., 13]
+                )
+                m[..., 14] = m.at[..., 14].set(
+                    +uy * (uz**2) * T[..., 0] + (uz**2) * T[..., 2] + 2 * uy * uz * T[..., 3] + 2 * uz * T[..., 6] + uy * T[..., 9] + T[..., 14]
+                )
+                m[..., 15] = m.at[..., 15].set(
+                    +(uy**2) * uz * T[..., 0] + 2 * uy * uz * T[..., 2] + (uy**2) * T[..., 3] + 2 * uy * T[..., 6] + uz * T[..., 8] + T[..., 15]
+                )
+                m[..., 16] = m.at[..., 16].set(
+                    (ux**2) * (uy**2) * T[..., 0]
+                    + 2 * ux * (uy**2) * T[..., 1]
+                    + 2 * uy * (ux**2) * T[..., 2]
+                    + 4 * ux * uy * T[..., 4]
+                    + (uy**2) * T[..., 7]
+                    + (ux**2) * T[..., 8]
+                    + 2 * ux * T[..., 10]
+                    + 2 * uy * T[..., 12]
+                    + T[..., 16]
+                )
+                m[..., 17] = m.at[..., 17].set(
+                    (ux**2) * (uz**2) * T[..., 0]
+                    + 2 * ux * (uz**2) * T[..., 1]
+                    + 2 * uz * (ux**2) * T[..., 3]
+                    + 4 * ux * uz * T[..., 5]
+                    + (uz**2) * T[..., 7]
+                    + (ux**2) * T[..., 9]
+                    + 2 * ux * T[..., 11]
+                    + 2 * uz * T[..., 13]
+                    + T[..., 17]
+                )
+                m[..., 18] = m.at[..., 18].set(
+                    (uy**2) * (uz**2) * T[..., 0]
+                    + 2 * uy * (uz**2) * T[..., 2]
+                    + 2 * uz * (uy**2) * T[..., 3]
+                    + 4 * uy * uz * T[..., 6]
+                    + (uz**2) * T[..., 8]
+                    + (uy**2) * T[..., 9]
+                    + 2 * uy * T[..., 14]
+                    + 2 * uz * T[..., 15]
+                    + T[..., 18]
+                )
+                return m
+
+        elif isinstance(self.lattice, LatticeD3Q27):
+
+            def shift_inverse(T, u):
+                ux = u[..., 0]
+                uy = u[..., 1]
+                uz = u[..., 2]
+                m = jnp.zeros_like(T)
+                m = m.at[..., 0].set(T[..., 0])
+                m = m.at[..., 1].set(T[..., 1] + T[..., 0] * ux)
+                m = m.at[..., 2].set(T[..., 2] + T[..., 0] * uy)
+                m = m.at[..., 3].set(T[..., 3] + T[..., 0] * uz)
+                m = m.at[..., 4].set(T[..., 4] + T[..., 2] * ux + T[..., 1] * uy + T[..., 0] * ux * uy)
+                m = m.at[..., 5].set(T[..., 5] + T[..., 3] * ux + T[..., 1] * uz + T[..., 0] * ux * uz)
+                m = m.at[..., 6].set(T[..., 6] + T[..., 3] * uy + T[..., 2] * uz + T[..., 0] * uy * uz)
+                m = m.at[..., 7].set(T[..., 0] * ux**2 + 2 * T[..., 1] * ux + T[..., 7])
+                m = m.at[..., 8].set(T[..., 0] * uy**2 + 2 * T[..., 2] * uy + T[..., 8])
+                m = m.at[..., 9].set(T[..., 0] * uz**2 + 2 * T[..., 3] * uz + T[..., 9])
+                m = m.at[..., 10].set(
+                    T[..., 10] + T[..., 8] * ux + 2 * T[..., 4] * uy + T[..., 1] * uy**2 + T[..., 0] * ux * uy ^ 2 + 2 * T[..., 2] * ux * uy
+                )
+                m = m.at[..., 11].set(
+                    T[..., 11] + T[..., 9] * ux + 2 * T[..., 5] * uz + T[..., 1] * uz**2 + T[..., 0] * ux * uz ^ 2 + 2 * T[..., 3] * ux * uz
+                )
+                m = m.at[..., 12].set(
+                    T[..., 12] + 2 * T[..., 4] * ux + T[..., 7] * uy + T[..., 2] * ux**2 + T[..., 0] * ux ^ 2 * uy + 2 * T[..., 1] * ux * uy
+                )
+                m = m.at[..., 13].set(
+                    T[..., 13] + 2 * T[..., 5] * ux + T[..., 7] * uz + T[..., 3] * ux**2 + T[..., 0] * ux ^ 2 * uz + 2 * T[..., 1] * ux * uz
+                )
+                m = m.at[..., 14].set(
+                    T[..., 14] + T[..., 9] * uy + 2 * T[..., 6] * uz + T[..., 2] * uz**2 + T[..., 0] * uy * uz ^ 2 + 2 * T[..., 3] * uy * uz
+                )
+                m = m.at[..., 15].set(
+                    T[..., 15] + 2 * T[..., 6] * uy + T[..., 8] * uz + T[..., 3] * uy**2 + T[..., 0] * uy ^ 2 * uz + 2 * T[..., 2] * uy * uz
+                )
+                m = m.at[..., 16].set(
+                    T[..., 16]
+                    + T[..., 6] * ux
+                    + T[..., 5] * uy
+                    + T[..., 4] * uz
+                    + T[..., 3] * ux * uy
+                    + T[..., 2] * ux * uz
+                    + T[..., 1] * uy * uz
+                    + T[..., 0] * ux * uy * uz
+                )
+                m = m.at[..., 17].set(
+                    T[..., 0] * ux**2 * uy**2
+                    + 2 * T[..., 2] * ux**2 * uy
+                    + T[..., 8] * ux**2
+                    + 2 * T[..., 1] * ux * uy**2
+                    + 4 * T[..., 4] * ux * uy
+                    + 2 * T[..., 10] * ux
+                    + T[..., 7] * uy**2
+                    + 2 * T[..., 12] * uy
+                    + T[..., 17]
+                )
+                m = m.at[..., 18].set(
+                    T[..., 0] * ux**2 * uz**2
+                    + 2 * T[..., 3] * ux**2 * uz
+                    + T[..., 9] * ux**2
+                    + 2 * T[..., 1] * ux * uz**2
+                    + 4 * T[..., 5] * ux * uz
+                    + 2 * T[..., 11] * ux
+                    + T[..., 7] * uz**2
+                    + 2 * T[..., 13] * uz
+                    + T[..., 18]
+                )
+                m = m.at[..., 19].set(
+                    T[..., 0] * uy**2 * uz**2
+                    + 2 * T[..., 3] * uy**2 * uz
+                    + T[..., 9] * uy**2
+                    + 2 * T[..., 2] * uy * uz**2
+                    + 4 * T[..., 6] * uy * uz
+                    + 2 * T[..., 14] * uy
+                    + T[..., 8] * uz**2
+                    + 2 * T[..., 15] * uz
+                    + T[..., 19]
+                )
+                m = m.at[..., 20].set(
+                    T[..., 20]
+                    + 2 * T[..., 16] * ux
+                    + T[..., 13] * uy
+                    + T[..., 12] * uz
+                    + T[..., 6] * ux**2
+                    + T[..., 3] * ux**2 * uy
+                    + T[..., 2] * ux**2 * uz
+                    + 2 * T[..., 5] * ux * uy
+                    + 2 * T[..., 4] * ux * uz
+                    + T[..., 7] * uy * uz
+                    + 2 * T[..., 1] * ux * uy * uz
+                    + T[..., 0] * ux**2 * uy * uz
+                )
+                m = m.at[..., 21].set(
+                    T[..., 21]
+                    + T[..., 15] * ux
+                    + 2 * T[..., 16] * uy
+                    + T[..., 10] * uz
+                    + T[..., 5] * uy**2
+                    + T[..., 3] * ux * uy**2
+                    + T[..., 1] * uy**2 * uz
+                    + 2 * T[..., 6] * ux * uy
+                    + T[..., 8] * ux * uz
+                    + 2 * T[..., 4] * uy * uz
+                    + 2 * T[..., 2] * ux * uy * uz
+                    + T[..., 0] * ux * uy**2 * uz
+                )
+                m = m.at[..., 22].set(
+                    T[..., 22]
+                    + T[..., 14] * ux
+                    + T[..., 11] * uy
+                    + 2 * T[..., 16] * uz
+                    + T[..., 4] * uz**2
+                    + T[..., 2] * ux * uz**2
+                    + T[..., 1] * uy * uz**2
+                    + T[..., 9] * ux * uy
+                    + 2 * T[..., 6] * ux * uz
+                    + 2 * T[..., 5] * uy * uz
+                    + 2 * T[..., 3] * ux * uy * uz
+                    + T[..., 0] * ux * uy * uz**2
+                )
+                m = m.at[..., 23].set(
+                    T[..., 23]
+                    + T[..., 19] * ux
+                    + 2 * T[..., 22] * uy
+                    + 2 * T[..., 21] * uz
+                    + T[..., 11] * uy**2
+                    + T[..., 10] * uz**2
+                    + T[..., 9] * ux * uy**2
+                    + T[..., 8] * ux * uz**2
+                    + 2 * T[..., 4] * uy * uz**2
+                    + 2 * T[..., 5] * uy**2 * uz
+                    + T[..., 1] * uy**2 * uz**2
+                    + 2 * T[..., 14] * ux * uy
+                    + 2 * T[..., 15] * ux * uz
+                    + 4 * T[..., 16] * uy * uz
+                    + 4 * T[..., 6] * ux * uy * uz
+                    + 2 * T[..., 2] * ux * uy * uz**2
+                    + 2 * T[..., 3] * ux * uy**2 * uz
+                    + T[..., 0] * ux * uy**2 * uz**2
+                )
+                m = m.at[..., 24].set(
+                    T[..., 24]
+                    + 2 * T[..., 22] * ux
+                    + T[..., 18] * uy
+                    + 2 * T[..., 20] * uz
+                    + T[..., 14] * ux**2
+                    + T[..., 12] * uz**2
+                    + T[..., 9] * ux**2 * uy
+                    + 2 * T[..., 4] * ux * uz**2
+                    + 2 * T[..., 6] * ux**2 * uz
+                    + T[..., 7] * uy * uz**2
+                    + T[..., 2] * ux**2 * uz**2
+                    + 2 * T[..., 11] * ux * uy
+                    + 4 * T[..., 16] * ux * uz
+                    + 2 * T[..., 13] * uy * uz
+                    + 4 * T[..., 5] * ux * uy * uz
+                    + 2 * T[..., 1] * ux * uy * uz**2
+                    + 2 * T[..., 3] * ux**2 * uy * uz
+                    + T[..., 0] * ux**2 * uy * uz**2
+                )
+                m = m.at[..., 25].set(
+                    T[..., 25]
+                    + 2 * T[..., 21] * ux
+                    + 2 * T[..., 20] * uy
+                    + T[..., 17] * uz
+                    + T[..., 15] * ux**2
+                    + T[..., 13] * uy**2
+                    + 2 * T[..., 5] * ux * uy**2
+                    + 2 * T[..., 6] * ux**2 * uy
+                    + T[..., 8] * ux**2 * uz
+                    + T[..., 7] * uy**2 * uz
+                    + T[..., 3] * ux**2 * uy**2
+                    + 4 * T[..., 16] * ux * uy
+                    + 2 * T[..., 10] * ux * uz
+                    + 2 * T[..., 12] * uy * uz
+                    + 4 * T[..., 4] * ux * uy * uz
+                    + 2 * T[..., 1] * ux * uy**2 * uz
+                    + 2 * T[..., 2] * ux**2 * uy * uz
+                    + T[..., 0] * ux**2 * uy**2 * uz
+                )
+                m = m.at[..., 26].set(
+                    T[..., 0] * ux**2 * uy**2 * uz**2
+                    + 2 * T[..., 3] * ux**2 * uy**2 * uz
+                    + T[..., 9] * ux**2 * uy**2
+                    + 2 * T[..., 2] * ux**2 * uy * uz**2
+                    + 4 * T[..., 6] * ux**2 * uy * uz
+                    + 2 * T[..., 14] * ux**2 * uy
+                    + T[..., 8] * ux**2 * uz**2
+                    + 2 * T[..., 15] * ux**2 * uz
+                    + T[..., 19] * ux**2
+                    + 2 * T[..., 1] * ux * uy**2 * uz**2
+                    + 4 * T[..., 5] * ux * uy**2 * uz
+                    + 2 * T[..., 11] * ux * uy**2
+                    + 4 * T[..., 4] * ux * uy * uz**2
+                    + 8 * T[..., 16] * ux * uy * uz
+                    + 4 * T[..., 22] * ux * uy
+                    + 2 * T[..., 10] * ux * uz**2
+                    + 4 * T[..., 21] * ux * uz
+                    + 2 * T[..., 23] * ux
+                    + T[..., 7] * uy**2 * uz**2
+                    + 2 * T[..., 13] * uy**2 * uz
+                    + T[..., 18] * uy**2
+                    + 2 * T[..., 12] * uy * uz**2
+                    + 4 * T[..., 20] * uy * uz
+                    + 2 * T[..., 24] * uy
+                    + T[..., 17] * uz**2
+                    + 2 * T[..., 25] * uz
+                    + T[..., 26]
+                )
+                return m
+
             return map(lambda T, u: shift_inverse(T, u), T_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
@@ -1604,11 +2190,36 @@ class MultiphaseCascade(Multiphase):
         """
 
         def f(rho):
-            if self.lattice.d == 2:
+            if isinstance(self.lattice, LatticeD2Q9):
                 T_eq = jnp.zeros((self.nx, self.ny, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
                 T_eq = T_eq.at[..., 0].set(rho[..., 0])
                 T_eq = T_eq.at[..., 3].set(2 * rho[..., 0] * self.lattice.cs2)
                 T_eq = T_eq.at[..., 8].set(rho[..., 0] * self.lattice.cs**4)
+
+                return T_eq
+
+            elif isinstance(self.lattice, LatticeD3Q19):
+                T_eq = jnp.zeros((self.nx, self.ny, self.nz, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
+                T_eq = T_eq.at[..., 0].set(rho[..., 0])
+                T_eq = T_eq.at[..., 7].set(rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 8].set(rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 9].set(rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 16].set(rho[..., 0] * self.lattice.cs**4)
+                T_eq = T_eq.at[..., 17].set(rho[..., 0] * self.lattice.cs**4)
+                T_eq = T_eq.at[..., 18].set(rho[..., 0] * self.lattice.cs**4)
+
+                return T_eq
+
+            elif isinstance(self.lattice, LatticeD3Q27):
+                T_eq = jnp.zeros((self.nx, self.ny, self.nz, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
+                T_eq = T_eq.at[..., 0].set(rho[..., 0])
+                T_eq = T_eq.at[..., 7].set(rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 8].set(rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 9].set(rho[..., 0] * self.lattice.cs2)
+                T_eq = T_eq.at[..., 17].set(rho[..., 0] * self.lattice.cs**4)
+                T_eq = T_eq.at[..., 18].set(rho[..., 0] * self.lattice.cs**4)
+                T_eq = T_eq.at[..., 19].set(rho[..., 0] * self.lattice.cs**4)
+                T_eq = T_eq.at[..., 26].set(rho[..., 0] * self.lattice.cs**6)
 
                 return T_eq
 
@@ -1633,19 +2244,58 @@ class MultiphaseCascade(Multiphase):
         """
 
         def f(F, sigma, psi, s_b):
-            if self.lattice.d == 2:
-                T_eq = jnp.zeros((self.nx, self.ny, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
+            if isinstance(self.lattice, LatticeD2Q9):
+                C = jnp.zeros((self.nx, self.ny, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
                 Fx = F[..., 0]
                 Fy = F[..., 1]
-                eta = 4 * sigma * (Fx**2 + Fy**2) / (psi[..., 0] ** 2 * (1 / s_b - 0.5))
-                T_eq = T_eq.at[..., 1].set(Fx)
-                T_eq = T_eq.at[..., 2].set(Fy)
-                T_eq = T_eq.at[..., 3].set(eta)
-                T_eq = T_eq.at[..., 6].set(Fy * self.lattice.cs2)
-                T_eq = T_eq.at[..., 7].set(Fx * self.lattice.cs2)
-                T_eq = T_eq.at[..., 8].set(eta * self.lattice.cs2)
+                eta = 4 * sigma * (Fx**2 + Fy**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))  # For mechanical stability
+                C = C.at[..., 1].set(Fx)
+                C = C.at[..., 2].set(Fy)
+                C = C.at[..., 3].set(eta)
+                C = C.at[..., 6].set(Fy * self.lattice.cs2)
+                C = C.at[..., 7].set(Fx * self.lattice.cs2)
+                C = C.at[..., 8].set(eta * self.lattice.cs2)
 
-                return T_eq
+                return C
+            elif isinstance(self.lattice, LatticeD3Q19):
+                C = jnp.zeros((self.nx, self.ny, self.nz, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
+                Fx = F[..., 0]
+                Fy = F[..., 1]
+                Fz = F[..., 2]
+                eta = 4 * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
+                C = C.at[..., 1].set(Fx)
+                C = C.at[..., 2].set(Fy)
+                C = C.at[..., 3].set(Fy)
+                C = C.at[..., 7].set(eta)
+                C = C.at[..., 8].set(eta)
+                C = C.at[..., 9].set(eta)
+                C = C.at[..., 10].set(Fx * self.lattice.cs2)
+                C = C.at[..., 11].set(Fx * self.lattice.cs2)
+                C = C.at[..., 12].set(Fy * self.lattice.cs2)
+                C = C.at[..., 13].set(Fz * self.lattice.cs2)
+                C = C.at[..., 14].set(Fy * self.lattice.cs2)
+                C = C.at[..., 15].set(Fz * self.lattice.cs2)
+
+                return C
+            elif isinstance(self.lattice, LatticeD3Q27):
+                C = jnp.zeros((self.nx, self.ny, self.nz, self.lattice.q), dtype=self.precisionPolicy.compute_dtype)
+                Fx = F[..., 0]
+                Fy = F[..., 1]
+                Fz = F[..., 2]
+                C = C.at[..., 1].set(Fx)
+                C = C.at[..., 2].set(Fy)
+                C = C.at[..., 3].set(Fy)
+                C = C.at[..., 10].set(Fx * self.lattice.cs2)
+                C = C.at[..., 11].set(Fx * self.lattice.cs2)
+                C = C.at[..., 12].set(Fy * self.lattice.cs2)
+                C = C.at[..., 13].set(Fz * self.lattice.cs2)
+                C = C.at[..., 14].set(Fy * self.lattice.cs2)
+                C = C.at[..., 15].set(Fz * self.lattice.cs2)
+                C = C.at[..., 23].set(Fx * self.lattice.cs**4)
+                C = C.at[..., 24].set(Fy * self.lattice.cs**4)
+                C = C.at[..., 25].set(Fz * self.lattice.cs**4)
+
+                return C
 
         return map(lambda F, sigma, psi, s_b: f(F, sigma, psi, s_b), F_tree, self.sigma, psi_tree, self.s_b)
 
