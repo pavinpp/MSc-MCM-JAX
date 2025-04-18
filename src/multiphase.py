@@ -1370,6 +1370,8 @@ class MultiphaseMRT(Multiphase):
                 psi_s_tree,
             )
             return C_tree
+        else:
+            raise NotImplementedError("MRT model with D3Q27 model has not been implemented")
 
     @partial(jit, static_argnums=(0,), inline=True)
     def apply_force(self, m_tree, meq_tree, rho_tree, u_tree):
@@ -1489,7 +1491,7 @@ class MultiphaseCascade(Multiphase):
 
     @partial(jit, static_argnums=(0,))
     def compute_central_moment(self, m_tree, u_tree):
-        if self.lattice.d == 2:
+        if isinstance(self.lattice, LatticeD2Q9):
 
             def shift(m, u):
                 ux = u[..., 0]
@@ -1538,7 +1540,7 @@ class MultiphaseCascade(Multiphase):
 
     @partial(jit, static_argnums=(0,))
     def compute_central_moment_inverse(self, T_tree, u_tree):
-        if self.lattice.d == 2:
+        if isinstance(self.lattice, LatticeD2Q9):
 
             def shift_inverse(T, u):
                 ux = u[..., 0]
