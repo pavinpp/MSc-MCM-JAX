@@ -1298,8 +1298,7 @@ class MultiphaseMRT(Multiphase):
             raise ValueError("Matrix M must be a list")
         if len(value) != self.n_components:
             raise ValueError("Number of components does not match number of matrix M passed")
-        else:
-            self._M = value
+        self._M = value
 
     @partial(jit, static_argnums=(0,))
     def adjust_surface_tension(self, psi_tree):
