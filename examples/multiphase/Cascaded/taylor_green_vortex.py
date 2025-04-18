@@ -155,4 +155,4 @@ if __name__ == "__main__":
 
     os.system("rm -rf output*/ *.vtk")
     sim = TaylorGreen2D(**kwargs)
-    sim.run(800000)
+    sim.run(400000)

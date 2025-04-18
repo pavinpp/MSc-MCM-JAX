@@ -33,7 +33,7 @@ class Droplet2D(MultiphaseCascade):
 
         rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
 
-        rho = rho.reshape((nx, ny, 1))
+        rho = rho.reshape((self.nx, self.ny, 1))
         rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     s_1 = [1.0]  # Fixed
     s_2 = [s2]
     s_b = [s2]
-    s_3 = [1.6]  # [(16 - 8 * s2) / (8 - s2)]  # No slip
+    s_3 = [1.0]  # [(16 - 8 * s2) / (8 - s2)]  # No slip
     s_4 = [1.0]  # No slip
 
     G = -10 / 3
@@ -166,9 +166,9 @@ if __name__ == "__main__":
         "s_4": s_4,
         "sigma": [0.0],
         "precision": precision,
-        "io_rate": 10,
+        "io_rate": 10000,
         "compute_MLUPS": False,
-        "print_info_rate": 100,
+        "print_info_rate": 10000,
         "checkpoint_rate": -1,
         "checkpoint_dir": os.path.abspath("./checkpoints_"),
         "restore_checkpoint": False,
@@ -176,4 +176,4 @@ if __name__ == "__main__":
 
     os.system("rm -rf output*/ *.vtk")
     sim = Droplet2D(**kwargs)
-    sim.run(300)
+    sim.run(30000)

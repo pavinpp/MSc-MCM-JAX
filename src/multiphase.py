@@ -1707,7 +1707,8 @@ class MultiphaseCascade(Multiphase):
         Cascaded LBM collision step for lattice.
         """
         fin_tree = map(lambda f: self.precisionPolicy.cast_to_compute(f), fin_tree)
-        rho_tree, u_tree = self.update_macroscopic(fin_tree)
+        rho_tree, _ = self.update_macroscopic(fin_tree)
+        u_tree = self.macroscopic_velocity(fin_tree, rho_tree)
         T_tree = map(lambda f, M: jnp.dot(f, M), fin_tree, self.M)
         Tdash_tree = self.compute_central_moment(T_tree, u_tree)
         Tdash_eq_tree = self.compute_eq_central_moments(rho_tree)
