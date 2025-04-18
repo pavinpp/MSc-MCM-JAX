@@ -1502,6 +1502,64 @@ class MultiphaseCascade(Multiphase):
                 self.s_3,
                 self.s_4,
             )
+        elif isinstance(self.lattice, LatticeD3Q27):
+            self.s_plus = map(lambda s_b, s_2: (s_b + 2 * s_2) / 3, self.s_b, self.s_2)
+            self.s_minus = map(lambda s_b, s_2: (s_b - s_2) / 3, self.s_b, self.s_2)
+            self.s_3b = kwargs.get("s_3b")
+            self.s_4b = kwargs.get("s_4b")
+            self.s_5 = kwargs.get("s_5")
+            self.s_6 = kwargs.get("s_6")
+
+            def S(s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6):
+                S = np.diag([
+                    s_0,
+                    s_1,
+                    s_1,
+                    s_1,
+                    s_v,
+                    s_v,
+                    s_v,
+                    s_plus,
+                    s_plus,
+                    s_plus,
+                    s_3,
+                    s_3,
+                    s_3,
+                    s_3,
+                    s_3,
+                    s_3,
+                    s_3b,
+                    s_4,
+                    s_4,
+                    s_4,
+                    s_4b,
+                    s_5,
+                    s_6,
+                ])
+                S[7, 8] = s_minus
+                S[7, 9] = s_minus
+                S[8, 7] = s_minus
+                S[8, 9] = s_minus
+                S[9, 7] = s_minus
+                S[9, 8] = s_minus
+                return jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
+
+            self.S = map(
+                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6: S(
+                    s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6
+                ),
+                self.s_0,
+                self.s_1,
+                self.s_v,
+                self.s_plus,
+                self.s_minus,
+                self.s_3,
+                self.s_3b,
+                self.s_4,
+                self.s_4b,
+                self.s_5,
+                self.s_6,
+            )
 
     @property
     def M(self):
