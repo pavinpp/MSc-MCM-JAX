@@ -1438,7 +1438,7 @@ class MultiphaseCascade(Multiphase):
     """
     Cascaded LBM collision model transforms the distribution to central moments and then relaxation them. The central moments are obtained by first
     transforming distributions to raw-moment using transformation matrix similar to MRT model. The raw-moments are subsequently transformed to central
-    moments using shift-matrix. CLBM gives control over vapor diffusivity, binary diffusivity and Schmidt number, which is not possible using SRT model.
+    moments using shift-matrix. CLBM gives independent control over vapor diffusivity, binary diffusivity and Schmidt number, which is not possible using SRT model.
 
     The current implementation is based on:
     1. Fei, L. & Luo, K. H. Consistent forcing scheme in the cascaded lattice Boltzmann method. Phys. Rev. E 96, 053307 (2017).
@@ -1482,7 +1482,7 @@ class MultiphaseCascade(Multiphase):
             self.s_plus = map(lambda s_b, s_2: (s_b + 2 * s_2) / 3, self.s_b, self.s_2)
             self.s_minus = map(lambda s_b, s_2: (s_b - s_2) / 3, self.s_b, self.s_2)
 
-            def S(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4):
+            def f(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4):
                 S = np.diag([s_0, s_1, s_1, s_1, s_v, s_v, s_v, s_plus, s_plus, s_plus, s_3, s_3, s_3, s_3, s_3, s_3, s_4, s_4, s_4])
                 S[7, 8] = s_minus
                 S[7, 9] = s_minus
@@ -1493,10 +1493,10 @@ class MultiphaseCascade(Multiphase):
                 return jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
 
             self.S = map(
-                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_4: S(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4),
+                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_4: f(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4),
                 self.s_0,
                 self.s_1,
-                self.s_v,
+                self.s_2,
                 self.s_plus,
                 self.s_minus,
                 self.s_3,
@@ -1510,7 +1510,7 @@ class MultiphaseCascade(Multiphase):
             self.s_5 = kwargs.get("s_5")
             self.s_6 = kwargs.get("s_6")
 
-            def S(s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6):
+            def f(s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6):
                 S = np.diag([
                     s_0,
                     s_1,
@@ -1533,6 +1533,10 @@ class MultiphaseCascade(Multiphase):
                     s_4,
                     s_4,
                     s_4b,
+                    s_4b,
+                    s_4b,
+                    s_5,
+                    s_5,
                     s_5,
                     s_6,
                 ])
@@ -1545,12 +1549,12 @@ class MultiphaseCascade(Multiphase):
                 return jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
 
             self.S = map(
-                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6: S(
+                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6: f(
                     s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6
                 ),
                 self.s_0,
                 self.s_1,
-                self.s_v,
+                self.s_2,
                 self.s_plus,
                 self.s_minus,
                 self.s_3,
@@ -1620,6 +1624,8 @@ class MultiphaseCascade(Multiphase):
                 )
                 return T
 
+            return map(lambda m, u: shift(m, u), m_tree, u_tree)
+
         elif isinstance(self.lattice, LatticeD3Q19):
 
             def shift(m, u):
@@ -1627,35 +1633,35 @@ class MultiphaseCascade(Multiphase):
                 uy = u[..., 1]
                 uz = u[..., 2]
                 T = jnp.zeros_like(m)
-                T[..., 0] = T.at[..., 0].set(m[..., 0])
-                T[..., 1] = T.at[..., 1].set(-ux * m[..., 0] + m[..., 1])
-                T[..., 2] = T.at[..., 2].set(-uy * m[..., 0] + m[..., 2])
-                T[..., 3] = T.at[..., 3].set(-uz * m[..., 0] + m[..., 3])
-                T[..., 4] = T.at[..., 4].set(ux * uy * m[..., 0] - uy * m[..., 1] - ux * m[..., 2] + m[..., 4])
-                T[..., 5] = T.at[..., 5].set(ux * uz * m[..., 0] - uz * m[..., 1] - ux * m[..., 3] + m[..., 5])
-                T[..., 6] = T.at[..., 6].set(uy * uz * m[..., 0] - uz * m[..., 2] - uy * m[..., 3] + m[..., 6])
-                T[..., 7] = T.at[..., 7].set((ux**2) * m[..., 0] - 2 * ux * m[..., 1] + m[..., 7])
-                T[..., 8] = T.at[..., 8].set((uy**2) * m[..., 0] - 2 * uy * m[..., 2] + m[..., 8])
-                T[..., 9] = T.at[..., 9].set((uz**2) * m[..., 0] - 2 * uz * m[..., 3] + m[..., 9])
-                T[..., 10] = T.at[..., 10].set(
+                T = T.at[..., 0].set(m[..., 0])
+                T = T.at[..., 1].set(-ux * m[..., 0] + m[..., 1])
+                T = T.at[..., 2].set(-uy * m[..., 0] + m[..., 2])
+                T = T.at[..., 3].set(-uz * m[..., 0] + m[..., 3])
+                T = T.at[..., 4].set(ux * uy * m[..., 0] - uy * m[..., 1] - ux * m[..., 2] + m[..., 4])
+                T = T.at[..., 5].set(ux * uz * m[..., 0] - uz * m[..., 1] - ux * m[..., 3] + m[..., 5])
+                T = T.at[..., 6].set(uy * uz * m[..., 0] - uz * m[..., 2] - uy * m[..., 3] + m[..., 6])
+                T = T.at[..., 7].set((ux**2) * m[..., 0] - 2 * ux * m[..., 1] + m[..., 7])
+                T = T.at[..., 8].set((uy**2) * m[..., 0] - 2 * uy * m[..., 2] + m[..., 8])
+                T = T.at[..., 9].set((uz**2) * m[..., 0] - 2 * uz * m[..., 3] + m[..., 9])
+                T = T.at[..., 10].set(
                     -ux * (uy**2) * m[..., 0] + (uy**2) * m[..., 1] + 2 * ux * uy * m[..., 2] - 2 * uy * m[..., 4] - ux * m[..., 8] + m[..., 10]
                 )
-                T[..., 11] = T.at[..., 11].set(
+                T = T.at[..., 11].set(
                     -ux * (uz**2) * m[..., 0] + (uz**2) * m[..., 1] + 2 * ux * uz * m[..., 3] - 2 * uz * m[..., 5] - ux * m[..., 9] + m[..., 11]
                 )
-                T[..., 12] = T.at[..., 12].set(
+                T = T.at[..., 12].set(
                     -(ux**2) * uy * m[..., 0] + 2 * ux * uy * m[..., 1] + (ux**2) * m[..., 2] - 2 * ux * m[..., 4] - uy * m[..., 7] + m[..., 12]
                 )
-                T[..., 13] = T.at[..., 13].set(
+                T = T.at[..., 13].set(
                     -(ux**2) * uz * m[..., 0] + 2 * ux * uz * m[..., 1] + (ux**2) * m[..., 3] - 2 * ux * m[..., 5] - uz * m[..., 7] + m[..., 13]
                 )
-                T[..., 14] = T.at[..., 14].set(
+                T = T.at[..., 14].set(
                     -uy * (uz**2) * m[..., 0] + (uz**2) * m[..., 2] + 2 * uy * uz * m[..., 3] - 2 * uz * m[..., 6] - uy * m[..., 9] + m[..., 14]
                 )
-                T[..., 15] = T.at[..., 15].set(
+                T = T.at[..., 15].set(
                     -(uy**2) * uz * m[..., 0] + 2 * uy * uz * m[..., 2] + (uy**2) * m[..., 3] - 2 * uy * m[..., 6] - uz * m[..., 8] + m[..., 15]
                 )
-                T[..., 16] = T.at[..., 16].set(
+                T = T.at[..., 16].set(
                     (ux**2) * (uy**2) * m[..., 0]
                     - 2 * ux * (uy**2) * m[..., 1]
                     - 2 * uy * (ux**2) * m[..., 2]
@@ -1666,7 +1672,7 @@ class MultiphaseCascade(Multiphase):
                     - 2 * uy * m[..., 12]
                     + m[..., 16]
                 )
-                T[..., 17] = T.at[..., 17].set(
+                T = T.at[..., 17].set(
                     (ux**2) * (uz**2) * m[..., 0]
                     - 2 * ux * (uz**2) * m[..., 1]
                     - 2 * uz * (ux**2) * m[..., 3]
@@ -1677,7 +1683,7 @@ class MultiphaseCascade(Multiphase):
                     - 2 * uz * m[..., 13]
                     + m[..., 17]
                 )
-                T[..., 18] = T.at[..., 18].set(
+                T = T.at[..., 18].set(
                     (uy**2) * (uz**2) * m[..., 0]
                     - 2 * uy * (uz**2) * m[..., 2]
                     - 2 * uz * (uy**2) * m[..., 3]
@@ -1688,6 +1694,9 @@ class MultiphaseCascade(Multiphase):
                     - 2 * uz * m[..., 15]
                     + m[..., 18]
                 )
+                return T
+
+            return map(lambda m, u: shift(m, u), m_tree, u_tree)
 
         elif isinstance(self.lattice, LatticeD3Q27):
 
@@ -1707,22 +1716,22 @@ class MultiphaseCascade(Multiphase):
                 T = T.at[..., 8].set(m[..., 0] * uy**2 - 2 * m[..., 2] * uy + m[..., 8])
                 T = T.at[..., 9].set(m[..., 0] * uz**2 - 2 * m[..., 3] * uz + m[..., 9])
                 T = T.at[..., 10].set(
-                    m[..., 10] - m[..., 8] * ux - 2 * m[..., 4] * uy + m[..., 1] * uy**2 - m[..., 0] * ux * uy ^ 2 + 2 * m[..., 2] * ux * uy
+                    m[..., 10] - m[..., 8] * ux - 2 * m[..., 4] * uy + m[..., 1] * uy**2 - m[..., 0] * ux * uy**2 + 2 * m[..., 2] * ux * uy
                 )
                 T = T.at[..., 11].set(
-                    m[..., 11] - m[..., 9] * ux - 2 * m[..., 5] * uz + m[..., 1] * uz**2 - m[..., 0] * ux * uz ^ 2 + 2 * m[..., 3] * ux * uz
+                    m[..., 11] - m[..., 9] * ux - 2 * m[..., 5] * uz + m[..., 1] * uz**2 - m[..., 0] * ux * uz**2 + 2 * m[..., 3] * ux * uz
                 )
                 T = T.at[..., 12].set(
-                    m[..., 12] - 2 * m[..., 4] * ux - m[..., 7] * uy + m[..., 2] * ux**2 - m[..., 0] * ux ^ 2 * uy + 2 * m[..., 1] * ux * uy
+                    m[..., 12] - 2 * m[..., 4] * ux - m[..., 7] * uy + m[..., 2] * ux**2 - m[..., 0] * ux**2 * uy + 2 * m[..., 1] * ux * uy
                 )
                 T = T.at[..., 13].set(
-                    m[..., 13] - 2 * m[..., 5] * ux - m[..., 7] * uz + m[..., 3] * ux**2 - m[..., 0] * ux ^ 2 * uz + 2 * m[..., 1] * ux * uz
+                    m[..., 13] - 2 * m[..., 5] * ux - m[..., 7] * uz + m[..., 3] * ux**2 - m[..., 0] * ux**2 * uz + 2 * m[..., 1] * ux * uz
                 )
                 T = T.at[..., 14].set(
-                    m[..., 14] - m[..., 9] * uy - 2 * m[..., 6] * uz + m[..., 2] * uz**2 - m[..., 0] * uy * uz ^ 2 + 2 * m[..., 3] * uy * uz
+                    m[..., 14] - m[..., 9] * uy - 2 * m[..., 6] * uz + m[..., 2] * uz**2 - m[..., 0] * uy * uz**2 + 2 * m[..., 3] * uy * uz
                 )
                 T = T.at[..., 15].set(
-                    m[..., 15] - 2 * m[..., 6] * uy - m[..., 8] * uz + m[..., 3] * uy**2 - m[..., 0] * uy ^ 2 * uz + 2 * m[..., 2] * uy * uz
+                    m[..., 15] - 2 * m[..., 6] * uy - m[..., 8] * uz + m[..., 3] * uy**2 - m[..., 0] * uy**2 * uz + 2 * m[..., 2] * uy * uz
                 )
                 T = T.at[..., 16].set(
                     m[..., 16]
@@ -1899,6 +1908,8 @@ class MultiphaseCascade(Multiphase):
                     + m[..., 26]
                 )
 
+                return T
+
             return map(lambda m, u: shift(m, u), m_tree, u_tree)
 
     @partial(jit, static_argnums=(0,))
@@ -1948,6 +1959,8 @@ class MultiphaseCascade(Multiphase):
                 )
                 return m
 
+            return map(lambda T, u: shift_inverse(T, u), T_tree, u_tree)
+
         elif isinstance(self.lattice, LatticeD3Q19):
 
             def shift_inverse(T, u):
@@ -1955,35 +1968,35 @@ class MultiphaseCascade(Multiphase):
                 uy = u[..., 1]
                 uz = u[..., 2]
                 m = jnp.zeros_like(T)
-                m[..., 0] = m.at[..., 0].set(T[..., 0])
-                m[..., 1] = m.at[..., 1].set(ux * T[..., 0] + T[..., 1])
-                m[..., 2] = m.at[..., 2].set(uy * T[..., 0] + T[..., 2])
-                m[..., 3] = m.at[..., 3].set(uz * T[..., 0] + T[..., 3])
-                m[..., 4] = m.at[..., 4].set(ux * uy * T[..., 0] + uy * T[..., 1] + ux * T[..., 2] + T[..., 4])
-                m[..., 5] = m.at[..., 5].set(ux * uz * T[..., 0] + uz * T[..., 1] + ux * T[..., 3] + T[..., 5])
-                m[..., 6] = m.at[..., 6].set(uy * uz * T[..., 0] + uz * T[..., 2] + uy * T[..., 3] + T[..., 6])
-                m[..., 7] = m.at[..., 7].set((ux**2) * T[..., 0] + 2 * ux * T[..., 1] + T[..., 7])
-                m[..., 8] = m.at[..., 8].set((uy**2) * T[..., 0] + 2 * uy * T[..., 2] + T[..., 8])
-                m[..., 9] = m.at[..., 9].set((uz**2) * T[..., 0] + 2 * uz * T[..., 3] + T[..., 9])
-                m[..., 10] = m.at[..., 10].set(
-                    +ux * (uy**2) * T[..., 0] + (uy**2) * T[..., 1] + 2 * ux * uy * T[..., 2] + 2 * uy * T[..., 4] + ux * T[..., 8] + T[..., 10]
+                m = m.at[..., 0].set(T[..., 0])
+                m = m.at[..., 1].set(ux * T[..., 0] + T[..., 1])
+                m = m.at[..., 2].set(uy * T[..., 0] + T[..., 2])
+                m = m.at[..., 3].set(uz * T[..., 0] + T[..., 3])
+                m = m.at[..., 4].set(ux * uy * T[..., 0] + uy * T[..., 1] + ux * T[..., 2] + T[..., 4])
+                m = m.at[..., 5].set(ux * uz * T[..., 0] + uz * T[..., 1] + ux * T[..., 3] + T[..., 5])
+                m = m.at[..., 6].set(uy * uz * T[..., 0] + uz * T[..., 2] + uy * T[..., 3] + T[..., 6])
+                m = m.at[..., 7].set((ux**2) * T[..., 0] + 2 * ux * T[..., 1] + T[..., 7])
+                m = m.at[..., 8].set((uy**2) * T[..., 0] + 2 * uy * T[..., 2] + T[..., 8])
+                m = m.at[..., 9].set((uz**2) * T[..., 0] + 2 * uz * T[..., 3] + T[..., 9])
+                m = m.at[..., 10].set(
+                    ux * (uy**2) * T[..., 0] + (uy**2) * T[..., 1] + 2 * ux * uy * T[..., 2] + 2 * uy * T[..., 4] + ux * T[..., 8] + T[..., 10]
                 )
-                m[..., 11] = m.at[..., 11].set(
-                    +ux * (uz**2) * T[..., 0] + (uz**2) * T[..., 1] + 2 * ux * uz * T[..., 3] + 2 * uz * T[..., 5] + ux * T[..., 9] + T[..., 11]
+                m = m.at[..., 11].set(
+                    ux * (uz**2) * T[..., 0] + (uz**2) * T[..., 1] + 2 * ux * uz * T[..., 3] + 2 * uz * T[..., 5] + ux * T[..., 9] + T[..., 11]
                 )
-                m[..., 12] = m.at[..., 12].set(
-                    +(ux**2) * uy * T[..., 0] + 2 * ux * uy * T[..., 1] + (ux**2) * T[..., 2] + 2 * ux * T[..., 4] + uy * T[..., 7] + T[..., 12]
+                m = m.at[..., 12].set(
+                    (ux**2) * uy * T[..., 0] + 2 * ux * uy * T[..., 1] + (ux**2) * T[..., 2] + 2 * ux * T[..., 4] + uy * T[..., 7] + T[..., 12]
                 )
-                m[..., 13] = m.at[..., 13].set(
-                    +(ux**2) * uz * T[..., 0] + 2 * ux * uz * T[..., 1] + (ux**2) * T[..., 3] + 2 * ux * T[..., 5] + uz * T[..., 7] + T[..., 13]
+                m = m.at[..., 13].set(
+                    (ux**2) * uz * T[..., 0] + 2 * ux * uz * T[..., 1] + (ux**2) * T[..., 3] + 2 * ux * T[..., 5] + uz * T[..., 7] + T[..., 13]
                 )
-                m[..., 14] = m.at[..., 14].set(
-                    +uy * (uz**2) * T[..., 0] + (uz**2) * T[..., 2] + 2 * uy * uz * T[..., 3] + 2 * uz * T[..., 6] + uy * T[..., 9] + T[..., 14]
+                m = m.at[..., 14].set(
+                    uy * (uz**2) * T[..., 0] + (uz**2) * T[..., 2] + 2 * uy * uz * T[..., 3] + 2 * uz * T[..., 6] + uy * T[..., 9] + T[..., 14]
                 )
-                m[..., 15] = m.at[..., 15].set(
-                    +(uy**2) * uz * T[..., 0] + 2 * uy * uz * T[..., 2] + (uy**2) * T[..., 3] + 2 * uy * T[..., 6] + uz * T[..., 8] + T[..., 15]
+                m = m.at[..., 15].set(
+                    (uy**2) * uz * T[..., 0] + 2 * uy * uz * T[..., 2] + (uy**2) * T[..., 3] + 2 * uy * T[..., 6] + uz * T[..., 8] + T[..., 15]
                 )
-                m[..., 16] = m.at[..., 16].set(
+                m = m.at[..., 16].set(
                     (ux**2) * (uy**2) * T[..., 0]
                     + 2 * ux * (uy**2) * T[..., 1]
                     + 2 * uy * (ux**2) * T[..., 2]
@@ -1994,7 +2007,7 @@ class MultiphaseCascade(Multiphase):
                     + 2 * uy * T[..., 12]
                     + T[..., 16]
                 )
-                m[..., 17] = m.at[..., 17].set(
+                m = m.at[..., 17].set(
                     (ux**2) * (uz**2) * T[..., 0]
                     + 2 * ux * (uz**2) * T[..., 1]
                     + 2 * uz * (ux**2) * T[..., 3]
@@ -2005,7 +2018,7 @@ class MultiphaseCascade(Multiphase):
                     + 2 * uz * T[..., 13]
                     + T[..., 17]
                 )
-                m[..., 18] = m.at[..., 18].set(
+                m = m.at[..., 18].set(
                     (uy**2) * (uz**2) * T[..., 0]
                     + 2 * uy * (uz**2) * T[..., 2]
                     + 2 * uz * (uy**2) * T[..., 3]
@@ -2017,6 +2030,8 @@ class MultiphaseCascade(Multiphase):
                     + T[..., 18]
                 )
                 return m
+
+            return map(lambda T, u: shift_inverse(T, u), T_tree, u_tree)
 
         elif isinstance(self.lattice, LatticeD3Q27):
 
@@ -2036,22 +2051,22 @@ class MultiphaseCascade(Multiphase):
                 m = m.at[..., 8].set(T[..., 0] * uy**2 + 2 * T[..., 2] * uy + T[..., 8])
                 m = m.at[..., 9].set(T[..., 0] * uz**2 + 2 * T[..., 3] * uz + T[..., 9])
                 m = m.at[..., 10].set(
-                    T[..., 10] + T[..., 8] * ux + 2 * T[..., 4] * uy + T[..., 1] * uy**2 + T[..., 0] * ux * uy ^ 2 + 2 * T[..., 2] * ux * uy
+                    T[..., 10] + T[..., 8] * ux + 2 * T[..., 4] * uy + T[..., 1] * uy**2 + T[..., 0] * ux * uy**2 + 2 * T[..., 2] * ux * uy
                 )
                 m = m.at[..., 11].set(
-                    T[..., 11] + T[..., 9] * ux + 2 * T[..., 5] * uz + T[..., 1] * uz**2 + T[..., 0] * ux * uz ^ 2 + 2 * T[..., 3] * ux * uz
+                    T[..., 11] + T[..., 9] * ux + 2 * T[..., 5] * uz + T[..., 1] * uz**2 + T[..., 0] * ux * uz**2 + 2 * T[..., 3] * ux * uz
                 )
                 m = m.at[..., 12].set(
-                    T[..., 12] + 2 * T[..., 4] * ux + T[..., 7] * uy + T[..., 2] * ux**2 + T[..., 0] * ux ^ 2 * uy + 2 * T[..., 1] * ux * uy
+                    T[..., 12] + 2 * T[..., 4] * ux + T[..., 7] * uy + T[..., 2] * ux**2 + T[..., 0] * ux**2 * uy + 2 * T[..., 1] * ux * uy
                 )
                 m = m.at[..., 13].set(
-                    T[..., 13] + 2 * T[..., 5] * ux + T[..., 7] * uz + T[..., 3] * ux**2 + T[..., 0] * ux ^ 2 * uz + 2 * T[..., 1] * ux * uz
+                    T[..., 13] + 2 * T[..., 5] * ux + T[..., 7] * uz + T[..., 3] * ux**2 + T[..., 0] * ux**2 * uz + 2 * T[..., 1] * ux * uz
                 )
                 m = m.at[..., 14].set(
-                    T[..., 14] + T[..., 9] * uy + 2 * T[..., 6] * uz + T[..., 2] * uz**2 + T[..., 0] * uy * uz ^ 2 + 2 * T[..., 3] * uy * uz
+                    T[..., 14] + T[..., 9] * uy + 2 * T[..., 6] * uz + T[..., 2] * uz**2 + T[..., 0] * uy * uz**2 + 2 * T[..., 3] * uy * uz
                 )
                 m = m.at[..., 15].set(
-                    T[..., 15] + 2 * T[..., 6] * uy + T[..., 8] * uz + T[..., 3] * uy**2 + T[..., 0] * uy ^ 2 * uz + 2 * T[..., 2] * uy * uz
+                    T[..., 15] + 2 * T[..., 6] * uy + T[..., 8] * uz + T[..., 3] * uy**2 + T[..., 0] * uy**2 * uz + 2 * T[..., 2] * uy * uz
                 )
                 m = m.at[..., 16].set(
                     T[..., 16]
@@ -2320,10 +2335,10 @@ class MultiphaseCascade(Multiphase):
                 Fx = F[..., 0]
                 Fy = F[..., 1]
                 Fz = F[..., 2]
-                eta = 4 * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
+                eta = 4 * sigma * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
                 C = C.at[..., 1].set(Fx)
                 C = C.at[..., 2].set(Fy)
-                C = C.at[..., 3].set(Fy)
+                C = C.at[..., 3].set(Fz)
                 C = C.at[..., 7].set(eta)
                 C = C.at[..., 8].set(eta)
                 C = C.at[..., 9].set(eta)
@@ -2342,7 +2357,11 @@ class MultiphaseCascade(Multiphase):
                 Fz = F[..., 2]
                 C = C.at[..., 1].set(Fx)
                 C = C.at[..., 2].set(Fy)
-                C = C.at[..., 3].set(Fy)
+                C = C.at[..., 3].set(Fz)
+                eta = 4 * sigma * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
+                C = C.at[..., 7].set(eta)
+                C = C.at[..., 8].set(eta)
+                C = C.at[..., 9].set(eta)
                 C = C.at[..., 10].set(Fx * self.lattice.cs2)
                 C = C.at[..., 11].set(Fx * self.lattice.cs2)
                 C = C.at[..., 12].set(Fy * self.lattice.cs2)

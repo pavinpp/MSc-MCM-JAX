@@ -103,16 +103,6 @@ if __name__ == "__main__":
     e = LatticeD2Q9().c.T
     en = np.linalg.norm(e, axis=1)
 
-    # ex = np.array([0, 1, -1, 0, 0, 1, -1, 1, -1])
-    # ey = np.array([0, 0, 0, 1, -1, 1, -1, -1, 1])
-    # _e = np.zeros((9, 2))
-    # _e[:, 0] = ex
-    # _e[:, 1] = ey
-    # order = np.array([e.tolist().index((_e[i]).tolist()) for i in range(9)])
-    #
-    # lattice = LatticeD2Q9()
-    # lattice.e = _e.T
-
     # Cascaded LBM collision matrix
     M = np.array([
         [1, 1, 1, 1, 1, 1, 1, 1, 1],
