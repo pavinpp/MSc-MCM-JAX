@@ -98,8 +98,8 @@ class Cavity(KBCSim):
 
         # output profiles of velocity at mid-plane for benchmarking
         output_filename = "./profiles_" + f"{timestep:07d}.json"
-        ux_mid = 0.5 * (u[nx // 2, ny // 2, :, 0] + u[nx // 2 + 1, ny // 2 + 1, :, 0])
-        uz_mid = 0.5 * (u[:, ny // 2, nz // 2, 2] + u[:, ny // 2 + 1, nz // 2 + 1, 2])
+        ux_mid = 0.5 * (u[0, nx // 2, ny // 2, :, 0] + u[0, nx // 2 + 1, ny // 2 + 1, :, 0])
+        uz_mid = 0.5 * (u[0, :, ny // 2, nz // 2, 2] + u[0, :, ny // 2 + 1, nz // 2 + 1, 2])
         ldc_ref_result = {
             "ux(x=y=0)": list(ux_mid / prescribed_vel),
             "uz(z=y=0)": list(uz_mid / prescribed_vel),
