@@ -101,37 +101,11 @@ class Droplet3D(MultiphaseCascade):
 if __name__ == "__main__":
     # Cascaded LBM collision matrix
     # D3Q19
-    # e = LatticeD3Q19().c.T
-    # ex = e[:, 0]
-    # ey = e[:, 1]
-    # ez = e[:, 2]
-    # M = np.zeros((19, 19))
-    # M[0, :] = ex**0
-    # M[1, :] = ex
-    # M[2, :] = ey
-    # M[3, :] = ez
-    # M[4, :] = ex * ey
-    # M[5, :] = ex * ez
-    # M[6, :] = ey * ez
-    # M[7, :] = ex * ex
-    # M[8, :] = ey * ey
-    # M[9, :] = ez * ez
-    # M[10, :] = ex * ey * ey
-    # M[11, :] = ex * ez * ez
-    # M[12, :] = ey * ex * ex
-    # M[13, :] = ez * ex * ex
-    # M[14, :] = ey * ez * ez
-    # M[15, :] = ez * ey * ey
-    # M[16, :] = ex * ex * ey * ey
-    # M[17, :] = ex * ex * ez * ez
-    # M[18, :] = ey * ey * ez * ez
-
-    # D3Q27
-    e = LatticeD3Q27().c.T
+    e = LatticeD3Q19().c.T
     ex = e[:, 0]
     ey = e[:, 1]
     ez = e[:, 2]
-    M = np.zeros((27, 27))
+    M = np.zeros((19, 19))
     M[0, :] = ex**0
     M[1, :] = ex
     M[2, :] = ey
@@ -148,17 +122,43 @@ if __name__ == "__main__":
     M[13, :] = ez * ex * ex
     M[14, :] = ey * ez * ez
     M[15, :] = ez * ey * ey
-    M[16, :] = ex * ey * ez
-    M[17, :] = ex * ex * ey * ey
-    M[18, :] = ex * ex * ez * ez
-    M[19, :] = ey * ey * ez * ez
-    M[20, :] = ex * ex * ey * ez
-    M[21, :] = ex * ey * ey * ez
-    M[22, :] = ex * ey * ez * ez
-    M[23, :] = ex * ey * ey * ez * ez
-    M[24, :] = ex * ex * ey * ez * ez
-    M[25, :] = ex * ex * ey * ey * ez
-    M[26, :] = ex * ex * ey * ey * ez * ez
+    M[16, :] = ex * ex * ey * ey
+    M[17, :] = ex * ex * ez * ez
+    M[18, :] = ey * ey * ez * ez
+
+    # D3Q27
+    # e = LatticeD3Q27().c.T
+    # ex = e[:, 0]
+    # ey = e[:, 1]
+    # ez = e[:, 2]
+    # M = np.zeros((27, 27))
+    # M[0, :] = ex**0
+    # M[1, :] = ex
+    # M[2, :] = ey
+    # M[3, :] = ez
+    # M[4, :] = ex * ey
+    # M[5, :] = ex * ez
+    # M[6, :] = ey * ez
+    # M[7, :] = ex * ex
+    # M[8, :] = ey * ey
+    # M[9, :] = ez * ez
+    # M[10, :] = ex * ey * ey
+    # M[11, :] = ex * ez * ez
+    # M[12, :] = ey * ex * ex
+    # M[13, :] = ez * ex * ex
+    # M[14, :] = ey * ez * ez
+    # M[15, :] = ez * ey * ey
+    # M[16, :] = ex * ey * ez
+    # M[17, :] = ex * ex * ey * ey
+    # M[18, :] = ex * ex * ez * ez
+    # M[19, :] = ey * ey * ez * ez
+    # M[20, :] = ex * ex * ey * ez
+    # M[21, :] = ex * ey * ey * ez
+    # M[22, :] = ex * ey * ez * ez
+    # M[23, :] = ex * ey * ey * ez * ez
+    # M[24, :] = ex * ex * ey * ez * ez
+    # M[25, :] = ex * ex * ey * ey * ez
+    # M[26, :] = ex * ex * ey * ey * ez * ez
 
     rho_l = 2.783
     rho_g = 0.3675
@@ -187,8 +187,8 @@ if __name__ == "__main__":
     precision = "f32/f32"
     kwargs = {
         "n_components": 1,
-        # "lattice": LatticeD3Q19(precision),
-        "lattice": LatticeD3Q27(precision),
+        "lattice": LatticeD3Q19(precision),
+        #"lattice": LatticeD3Q27(precision),
         "nx": nx,
         "ny": ny,
         "nz": nz,
@@ -210,9 +210,9 @@ if __name__ == "__main__":
         "s_6": s_6,
         "sigma": [0.0],
         "precision": precision,
-        "io_rate": 10,
+        "io_rate": 10000,
         "compute_MLUPS": False,
-        "print_info_rate": 10,
+        "print_info_rate": 10000,
         "checkpoint_rate": -1,
         "checkpoint_dir": os.path.abspath("./checkpoints_"),
         "restore_checkpoint": False,
@@ -220,4 +220,4 @@ if __name__ == "__main__":
 
     os.system("rm -rf output*/ *.vtk")
     sim = Droplet3D(**kwargs)
-    sim.run(100)
+    sim.run(30000)
