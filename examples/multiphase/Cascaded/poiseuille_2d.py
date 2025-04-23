@@ -25,7 +25,7 @@ class Poiseuille2D(MultiphaseCascade):
     def initialize_macroscopic_fields(self):
         rho_tree = []
 
-        rho = np.ones((nx, ny, 1))
+        rho = np.ones((self.nx, self.ny, 1))
         rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)

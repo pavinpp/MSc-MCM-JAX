@@ -26,7 +26,7 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
 
         rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
 
-        rho = rho.reshape((nx, ny, 1))
+        rho = rho.reshape((self.nx, self.ny, 1))
         rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
