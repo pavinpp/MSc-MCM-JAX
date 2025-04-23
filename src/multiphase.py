@@ -1465,7 +1465,7 @@ class MultiphaseCascade(Multiphase):
             lambda M: jnp.array(M.T, dtype=self.precisionPolicy.compute_dtype),
             kwargs.get("M"),
         )
-        
+
         if isinstance(self.lattice, LatticeD2Q9):
             self.S = map(
                 lambda s_0, s_1, s_b, s_2, s_3, s_4: jnp.array(

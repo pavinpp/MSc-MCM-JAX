@@ -1,24 +1,24 @@
 """
-Single component 2D capillary rise example where a channel is initially submerged in liquid. The density of each region is computed using Maxwell's Construction. The density profile
-is initialized with smooth profile with specified interface width. Boundary conditions are periodic everywhere. Useful for tuning the various coefficients.
-
-The collision matrix is based on:
-1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+Single component 2D capillary rise example where a channel is initially submerged in liquid. The density of each region is computed using Maxwell's Construction. The density profile is initialized with smooth profile with specified
+interface thickness.
 """
 
 import os
 
 import numpy as np
 import jax.numpy as jnp
+from jax import jit
+from jax.tree import map
+from functools import partial
 
 from src.lattice import LatticeD2Q9
-from src.multiphase import MultiphaseMRT
+from src.multiphase import MultiphaseBGK
 from src.eos import Carnahan_Starling
 from src.boundary_conditions import BounceBack
 from src.utils import save_fields_vtk
 
 
-class CapillaryRise2D(MultiphaseMRT):
+class CapillaryRise2D(MultiphaseBGK):
     def initialize_macroscopic_fields(self):
         y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
         rho_profile = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (y - L) / width)
@@ -38,6 +38,13 @@ class CapillaryRise2D(MultiphaseMRT):
 
         return rho_tree, u_tree
 
+    @partial(jit, static_argnums=(0,))
+    def compute_potential(self, rho_tree):
+        psi = lambda rho: 4 * (1 - jnp.exp(-(200 / rho)))
+        psi_tree = map(psi, rho_tree)
+        U_tree = map(lambda psi: jnp.zeros(psi), psi_tree)
+        return psi_tree, U_tree
+
     def set_boundary_conditions(self):
         left_wall = np.array(
             [[self.nx // 2 - channel_width // 2, i + offset] for i in range(channel_height)],
@@ -47,19 +54,9 @@ class CapillaryRise2D(MultiphaseMRT):
             [[self.nx // 2 + channel_width // 2, i + offset] for i in range(channel_height)],
             dtype=np.int32,
         )
-        outside_left_wall = np.array(
-            [[nx // 2 - channel_width // 2 - 1, i + offset] for i in range(channel_height)],
-            dtype=np.int32,
-        )
-        outside_right_wall = np.array(
-            [[nx // 2 + channel_width // 2 + 1, i + offset] for i in range(channel_height)],
-            dtype=np.int32,
-        )
         walls = np.concatenate((
             left_wall,
             right_wall,
-            outside_left_wall,
-            outside_right_wall,
             self.boundingBoxIndices["top"],
             self.boundingBoxIndices["bottom"],
         ))
@@ -75,22 +72,13 @@ class CapillaryRise2D(MultiphaseMRT):
             )
         )
 
-    def get_force(self):
-        """
-        Gravity force
-        """
-        return jnp.array(
-            np.array([0.0, -1e-4]),
-            dtype=self.precisionPolicy.compute_dtype,
-        )
-
     def output_data(self, **kwargs):
         rho = np.array(kwargs["rho_prev_tree"][0][0, :, 1:-1, :])
         p = np.array(kwargs["p_tree"][0][:, 1:-1, :])
         u = np.array(kwargs["u_tree"][0][0, :, 1:-1, :])
         timestep = kwargs["timestep"]
         fields = {
-            "flag": self.solid_mask_streamed[:, 1:-1, 0],
+            "flag": self.solid_mask_streamed[0][:, 1:-1, 0],
             "p": p[..., 0],
             "rho": rho[..., 0],
             "ux": u[..., 0],
@@ -106,73 +94,28 @@ class CapillaryRise2D(MultiphaseMRT):
 
 
 if __name__ == "__main__":
-    nx = 200
-    ny = 150
+    nx = 800
+    ny = 500
 
-    channel_width = 8
-    channel_height = 60
-    offset = 20  # Distance of channel bottom from domain bottom
-    L = ny // 3  # 1/L of domain is filled with liquid, rest is vapor
+    channel_width = 36
+    channel_height = 600
+    offset = 100  # Distance of channel bottom from domain bottom
+    L = offset - 20  # 1/L of domain is filled with liquid, rest is vapor
 
     width = 5  # Initial Liquid-vapor interface thickness
 
-    a = 1.0
-    b = 4.0
-    R = 1.0
-
-    rho_g = 0.000626568
-    rho_l = 0.454078426
-    Tc = 0.0943287031
-    T = 0.5 * Tc
-
-    kwargs = {
-        "a": a,
-        "b": b,
-        "R": R,
-        "T": T,
-    }
-    eos = Carnahan_Starling(**kwargs)
-
-    e = LatticeD2Q9().c.T
-    en = np.linalg.norm(e, axis=1)
-    M = np.zeros((9, 9))
-    M[0, :] = en**0
-    M[1, :] = -4 * en**0 + 3 * en**2
-    M[2, :] = 4 * en**0 - (21 / 2) * en**2 + (9 / 2) * en**4
-    M[3, :] = e[:, 0]
-    M[4, :] = (-5 * en**0 + 3 * en**2) * e[:, 0]
-    M[5, :] = e[:, 1]
-    M[6, :] = (-5 * en**0 + 3 * en**2) * e[:, 1]
-    M[7, :] = e[:, 0] ** 2 - e[:, 1] ** 2
-    M[8, :] = e[:, 0] * e[:, 1]
-
-    s_rho = [0.0]
-    s_e = [0.5]
-    s_eta = [1.0]
-    s_j = [0.0]
-    s_q = [1.0]
-    s_v = [1.0]
+    ratio = 6.11
+    diff = 438.686
+    rho_g = diff / (ratio - 1)
+    rho_l = ratio * rho_g
 
     # Define contact angle matrix: I do not want any contact angle at the domain top and bottom, which are defined as walls.
     theta = 30 * (np.pi / 180) * np.ones((nx, ny, 1))
     theta[:, [0, ny - 1], 0] = 90 * (np.pi / 180)
-    # channel has thickness of 2 lattice units. Outer channel walls are set as neutral wetting to prevent fluid climbing on outside
-    outside_left_wall = np.array(
-        [[nx // 2 - channel_width // 2 - 1, i + offset] for i in range(channel_height)],
-        dtype=np.int32,
-    )
-    outside_right_wall = np.array(
-        [[nx // 2 + channel_width // 2 + 1, i + offset] for i in range(channel_height)],
-        dtype=np.int32,
-    )
-    theta[outside_left_wall] = 90 * (np.pi / 180)
-    theta[outside_right_wall] = 90 * (np.pi / 180)
 
     # Same goes for phi
     phi = 1.4 * np.ones((nx, ny, 1))
     phi[:, [0, ny - 1], 0] = 1.0
-    phi[outside_left_wall] = 1.0
-    phi[outside_right_wall] = 1.0
 
     # This is not used,
     delta_rho = np.zeros((nx, ny, 1))
@@ -185,18 +128,10 @@ if __name__ == "__main__":
         "nx": nx,
         "ny": ny,
         "nz": 0,
-        "body_force": [0.0, -0.95e-4],
-        "g_kkprime": -1.0 * np.ones((1, 1)),
-        "EOS": eos,
-        "k": [0.01],
+        "body_force": [0.0, -2e-8],
+        "g_kkprime": -120.0 * np.ones((1, 1)),
+        "k": [0.0],
         "A": 0.0 * np.ones((1, 1)),
-        "s_rho": s_rho,
-        "s_e": s_e,
-        "s_eta": s_eta,
-        "s_j": s_j,
-        "s_q": s_q,
-        "s_v": [1.0],
-        "M": [M],
         "kappa": [0.0],
         "precision": precision,
         "io_rate": 100,
@@ -208,4 +143,4 @@ if __name__ == "__main__":
 
     os.system("rm -rf output* *.vtk")
     sim = CapillaryRise2D(**kwargs)
-    sim.run(9000)
+    sim.run(50000)
