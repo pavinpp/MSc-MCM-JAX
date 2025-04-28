@@ -11,6 +11,12 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
 <p align="center">
   Capillary fingering in a channel
 </p>
+<p align="center">
+  <img src="assets/capillary_rise.gif" alt="" height="390" width="200">
+</p>
+<p align="center">
+  Capillary rise in parallel plates
+</p>
 
 ## Key Features
 - **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
