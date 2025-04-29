@@ -13,6 +13,10 @@ from src.boundary_conditions import BounceBack
 from src.utils import save_fields_vtk
 from src.eos import VanderWaal
 
+import jax
+
+jax.config.update("jax_default_matmul_precision", "highest")
+
 
 # Estimate surface tension
 class Droplet2D(MultiphaseMRT):
@@ -49,8 +53,8 @@ class Droplet2D(MultiphaseMRT):
             "ux": u[..., 0],
             "uy": u[..., 1],
         }
-        offset_x = 300
-        offset_y = 225
+        offset_x = 95
+        offset_y = 95
         rho_north = rho[self.nx // 2, self.ny // 2 - offset_y, 0]
         rho_south = rho[self.nx // 2, self.ny // 2 + offset_y, 0]
         rho_west = rho[self.nx // 2 - offset_x, self.ny // 2, 0]
@@ -67,8 +71,8 @@ class Droplet2D(MultiphaseMRT):
         p_east = p[self.nx // 2 + offset_x, self.ny // 2, 0]
         pressure_difference = p[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
         print(f"Pressure difference: {pressure_difference}")
-        if timestep == 30000:
-            file.write(f"{r},{pressure_difference}\n")
+        if timestep == 60000:
+            file.write(f"{1 / r},{pressure_difference}\n")
         save_fields_vtk(
             timestep,
             fields,
@@ -103,7 +107,7 @@ class DropletOnSurface2D(MultiphaseMRT):
     def set_boundary_conditions(self):
         walls = np.concatenate((self.boundingBoxIndices["top"], self.boundingBoxIndices["bottom"]))
         walls = tuple(walls.T)
-        self.BCs[0].append(BounceBack(walls, self, self.gridInfo, self.precisionPolicy, theta[walls], phi[walls], delta_rho[walls]))
+        self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta[walls], phi[walls], delta_rho[walls]))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -127,10 +131,10 @@ class DropletOnSurface2D(MultiphaseMRT):
 
 class CapillaryRise2D(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
-        y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
-        rho_profile = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (y - L) / width)
+        x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
+        rho_profile = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (x - L) / width)
         rho = rho_g * np.ones((self.nx, self.ny, 1))
-        rho[:, :, 0] = rho_profile
+        rho[:, :, 0] = rho_profile.reshape((self.nx, 1))
 
         rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
@@ -146,20 +150,15 @@ class CapillaryRise2D(MultiphaseMRT):
         return rho_tree, u_tree
 
     def set_boundary_conditions(self):
-        left_wall = np.array(
-            [[self.nx // 2 - channel_width // 2, i + offset] for i in range(channel_height)],
+        top_wall = np.array(
+            [[x, y] for x in range(150, 451) for y in range(29)],
             dtype=np.int32,
         )
-        right_wall = np.array(
-            [[self.nx // 2 + channel_width // 2, i + offset] for i in range(channel_height)],
+        bottom_wall = np.array(
+            [[x, y] for x in range(150, 451) for y in range(self.ny - 28, self.ny)],
             dtype=np.int32,
         )
-        walls = np.concatenate((
-            left_wall,
-            right_wall,
-            self.boundingBoxIndices["top"],
-            self.boundingBoxIndices["bottom"],
-        ))
+        walls = np.concatenate((top_wall, bottom_wall))
         walls = tuple(walls.T)
         self.BCs[0].append(
             BounceBack(
@@ -173,30 +172,34 @@ class CapillaryRise2D(MultiphaseMRT):
         )
 
     def output_data(self, **kwargs):
-        rho = np.array(kwargs["rho_prev_tree"][0][0, :, 1:-1, :])
-        p = np.array(kwargs["p_tree"][0][:, 1:-1, :])
-        u = np.array(kwargs["u_tree"][0][0, :, 1:-1, :])
+        rho = np.array(kwargs["rho_prev_tree"][0][0, ...])
+        p = np.array(kwargs["p_tree"][0][...])
+        u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
         fields = {
-            "flag": self.solid_mask_streamed[0][:, 1:-1, 0],
+            "flag": self.solid_mask_streamed[0][..., 0],
             "p": p[..., 0],
             "rho": rho[..., 0],
             "ux": u[..., 0],
             "uy": u[..., 1],
         }
-        print(f"Max velocity: {np.max(np.sqrt(np.sum(u**2, axis=-1)))}")
         save_fields_vtk(
             timestep,
             fields,
             "output_",
             "data",
         )
+        ind_mid = np.argmin(p[150:451, self.ny // 2, 0])
+        ind_side = np.argmin(p[150:451, self.ny - 30, 0])
+        meniscus_position = ind_mid
+        meniscus_height = ind_side - ind_mid
+        file.write(f"{timestep},{meniscus_height},{meniscus_position}\n")
 
 
 if __name__ == "__main__":
-    nx = 800
-    ny = 500
-    width = 3  # Initial Liquid-vapor interface thickness
+    nx = 600
+    ny = 100
+    width = 1  # Initial Liquid-vapor interface thickness
 
     e = LatticeD2Q9().c.T
     en = np.linalg.norm(e, axis=1)
@@ -223,10 +226,10 @@ if __name__ == "__main__":
     b = 2 / 21
     R = 1.0
 
-    rho_l = 6.764470400
-    rho_g = 0.838834226
+    rho_l = 7.491548920
+    rho_g = 0.448078056
     Tc = 0.5714285714
-    T = 0.8 * Tc
+    T = 0.7 * Tc
 
     kwargs = {
         "a": a,
@@ -236,11 +239,14 @@ if __name__ == "__main__":
     }
     eos = VanderWaal(**kwargs)
 
+    precision = "f32/f32"
+
     # Estimate surface tension
+    # os.system("rm -rf output* surface_tension.txt")
     file = open("surface_tension.txt", "w")
-    file.write("Radius,Pressure Difference\n")
-    for r in [75, 100, 125, 150, 175]:
-        precision = "f32/f32"
+    file.write("Inverse Radius,Pressure Difference\n")
+    file.write("0,0\n")
+    for r in [20, 25, 30, 35]:
         kwargs = {
             "n_components": 1,
             "lattice": LatticeD2Q9(precision),
@@ -250,8 +256,8 @@ if __name__ == "__main__":
             "nz": 0,
             "body_force": [0.0, 0.0],
             "g_kkprime": -1 * np.ones((1, 1)),
-            "k": [0.16],
-            "A": -0.032 * np.ones((1, 1)),
+            "k": [0.15],
+            "A": -0.115 * np.ones((1, 1)),
             "M": [M],
             "s_rho": s_rho,
             "s_e": s_e,
@@ -259,26 +265,27 @@ if __name__ == "__main__":
             "s_j": s_j,
             "s_q": s_q,
             "s_v": s_v,
-            "kappa": [0.0],
+            "kappa": [0.5],
             "precision": precision,
             "EOS": eos,
-            "io_rate": 10000,
-            "print_info_rate": 10000,
+            "io_rate": 60000,
+            "print_info_rate": 60000,
             "checkpoint_rate": -1,
             "checkpoint_dir": os.path.abspath("./checkpoints_"),
             "restore_checkpoint": False,
         }
         sim = Droplet2D(**kwargs)
-        sim.run(30000)
+        sim.run(60000)
     file.close()
 
-    theta = 30 * (np.pi / 180) * np.ones((nx, ny, 1))
-    phi = 1.14 * np.ones((nx, ny, 1))
+    theta = 19.1 * (np.pi / 180) * np.ones((nx, ny, 1))
+    phi = 1.4 * np.ones((nx, ny, 1))
     delta_rho = np.zeros((nx, ny, 1))
 
     # Estimate contact angle
-    r = 200
-    Disp = [0, 25, 50, 75, 100, 125, 150, 175]
+    os.system("rm -rf output* *.vtk")
+    r = 50
+    Disp = [0, 10, 20, 30]
     for disp in Disp:
         kwargs = {
             "n_components": 1,
@@ -287,10 +294,10 @@ if __name__ == "__main__":
             "nx": nx,
             "ny": ny,
             "nz": 0,
-            "body_force": [0.0, -2e-8],
+            "body_force": [0.0, 0.0],
             "g_kkprime": -1 * np.ones((1, 1)),
-            "k": [0.16],
-            "A": -0.032 * np.ones((1, 1)),
+            "k": [0.15],
+            "A": -0.115 * np.ones((1, 1)),
             "M": [M],
             "s_rho": s_rho,
             "s_e": s_e,
@@ -298,31 +305,26 @@ if __name__ == "__main__":
             "s_j": s_j,
             "s_q": s_q,
             "s_v": s_v,
-            "kappa": [0.0],
+            "kappa": [0.5],
             "precision": precision,
-            "io_rate": 1000,
-            "eos": eos,
-            "print_info_rate": 1000,
+            "io_rate": 40000,
+            "EOS": eos,
+            "print_info_rate": 40000,
             "checkpoint_rate": -1,
             "checkpoint_dir": os.path.abspath("./checkpoints_"),
             "restore_checkpoint": False,
         }
-        os.system("rm -rf output* *.vtk")
         sim = DropletOnSurface2D(**kwargs)
-        sim.run(10000)
+        sim.run(400000)
 
-    channel_width = 36
-    channel_height = 600
-    offset = 100  # Distance of channel bottom from domain bottom
-    L = offset - 20  # 1/L of domain is filled with liquid, rest is vapor
-
-    # Define contact angle matrix: I do not want any contact angle at the domain top and bottom, which are defined as walls.
-    theta = 30 * (np.pi / 180) * np.ones((nx, ny, 1))
-    theta[:, [0, ny - 1], 0] = 90 * (np.pi / 180)
-    phi = 1.14 * np.ones((nx, ny, 1))
-    phi[:, [0, ny - 1], 0] = 1.0
+    L = 150
+    theta = 19.1 * (np.pi / 180) * np.ones((nx, ny, 1))
+    phi = 1.4 * np.ones((nx, ny, 1))
     delta_rho = np.zeros((nx, ny, 1))
 
+    file = open("lucas_washburn.txt", "w")
+    file.write("Time,Menicus Height,Position\n")
+    os.system("rm -rf output* *.vtk")
     kwargs = {
         "n_components": 1,
         "lattice": LatticeD2Q9(precision),
@@ -330,10 +332,10 @@ if __name__ == "__main__":
         "nx": nx,
         "ny": ny,
         "nz": 0,
-        "body_force": [0.0, -2e-8],
-        "g_kkprime": -120.0 * np.ones((1, 1)),
-        "k": [0.16],
-        "A": -0.032 * np.ones((1, 1)),
+        "body_force": [0.0, 0.0],
+        "g_kkprime": -1 * np.ones((1, 1)),
+        "k": [0.15],
+        "A": -0.115 * np.ones((1, 1)),
         "M": [M],
         "s_rho": s_rho,
         "s_e": s_e,
@@ -341,14 +343,15 @@ if __name__ == "__main__":
         "s_j": s_j,
         "s_q": s_q,
         "s_v": s_v,
-        "kappa": [0.0],
+        "kappa": [0.5],
+        "EOS": eos,
         "precision": precision,
-        "io_rate": 100,
-        "print_info_rate": 100,
+        "io_rate": 1000,
+        "print_info_rate": 1000,
         "checkpoint_rate": -1,
         "checkpoint_dir": os.path.abspath("./checkpoints_"),
         "restore_checkpoint": False,
     }
-    os.system("rm -rf output* *.vtk")
     sim = CapillaryRise2D(**kwargs)
     sim.run(50000)
+    file.close()
