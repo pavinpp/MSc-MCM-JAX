@@ -1,7 +1,5 @@
-# This is the list of XLB's significant contributors.
-# This compilation acknowledges the principal contributors to XLB but does not include every individual who has contributed code. 
-# Due to the collective efforts of numerous employees from various corporations, some contributors may not be listed here. 
-# For a comprehensive view of all contributors, please refer to the revision history in the source control.
+# This is the list of gEOS-LB's significant contributors.
+# Since gEOS-LB is a fork of XLB, the contributors for this fork are only listed here.
+# For comprehensive view of all contributors, please refer to the parent Autodesk/XLB repo and its revision history in the source control.
 
-Mehdi Ataei (Autodesk Inc)
-Hesam Saleipour (Autodesk Inc)
+Piyush Pradhan (Department of Earth & Environmental Engineering, Columbia University, New York, NY, US)
