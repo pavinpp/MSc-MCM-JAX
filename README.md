@@ -15,7 +15,7 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
   <img src="assets/capillary_rise.gif" alt="" width="600">
 </p>
 <p align="center">
-  Capillary rise in parallel plates (single component-multiphase simulation)
+  Capillary rise in parallel plates (single component, multiphase simulation)
 </p>
 
 ## Key Features
