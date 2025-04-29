@@ -12,7 +12,7 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
   Capillary fingering in a channel
 </p>
 <p align="center">
-  <img src="assets/capillary_rise.gif" alt="" height="390" width="200">
+  <img src="assets/capillary_rise.gif" alt="" width="600">
 </p>
 <p align="center">
   Capillary rise in parallel plates
