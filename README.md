@@ -6,7 +6,7 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
 
 ## Showcase
 <p align="center">
-  <img src="assets/channel_fingering.gif" alt="" width="600">
+  <img src="assets/capillary_fingering.gif" alt="" width="600">
 </p>
 <p align="center">
   Capillary fingering in a channel (multi-component simulation)
