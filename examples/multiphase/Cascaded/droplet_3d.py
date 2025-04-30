@@ -20,6 +20,7 @@ import jax.numpy as jnp
 from jax import vmap, jit
 from jax.tree import reduce, map
 
+
 class Droplet3D(MultiphaseCascade):
     def initialize_macroscopic_fields(self):
         x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
@@ -188,7 +189,7 @@ if __name__ == "__main__":
     kwargs = {
         "n_components": 1,
         "lattice": LatticeD3Q19(precision),
-        #"lattice": LatticeD3Q27(precision),
+        # "lattice": LatticeD3Q27(precision),
         "nx": nx,
         "ny": ny,
         "nz": nz,

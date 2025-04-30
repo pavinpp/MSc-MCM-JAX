@@ -111,21 +111,9 @@ class Airfoil(KBCSim):
         dx = 0.01
         origin = (0.0, 0.0, 0.0)
         upper_bound = (self.visualization_bc.shape[0] * dx, self.visualization_bc.shape[1] * dx, self.visualization_bc.shape[2] * dx)
-        q_volume = pg.objects.Volume(
-            q,
-            spacing=(dx, dx, dx),
-            origin=origin,
-        )
-        norm_mu_volume = pg.objects.Volume(
-            norm_mu,
-            spacing=(dx, dx, dx),
-            origin=origin,
-        )
-        boundary_volume = pg.objects.Volume(
-            self.visualization_bc,
-            spacing=(dx, dx, dx),
-            origin=origin,
-        )
+        q_volume = pg.objects.Volume(q, spacing=(dx, dx, dx), origin=origin)
+        norm_mu_volume = pg.objects.Volume(norm_mu, spacing=(dx, dx, dx), origin=origin)
+        boundary_volume = pg.objects.Volume(self.visualization_bc, spacing=(dx, dx, dx), origin=origin)
 
         # Make colormap for norm_mu
         colormap = pg.Colormap("jet", vmin=0.0, vmax=0.05)

@@ -62,7 +62,7 @@ class Droplet3D(MultiphaseMRT):
             "uy": u[..., 1],
             "uz": u[..., 2],
         }
-        offset = 45
+        offset = 95
         rho_north = rho[self.nx // 2, self.ny // 2 - offset, self.nz // 2, 0]
         rho_south = rho[self.nx // 2, self.ny // 2 + offset, self.nz // 2, 0]
         rho_west = rho[self.nx // 2 - offset, self.ny // 2, self.nz // 2, 0]
