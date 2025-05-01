@@ -17,6 +17,12 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
 <p align="center">
   Capillary rise in parallel plates (single component, multiphase simulation)
 </p>
+<p align="center">
+  <img src="assets/droplet_impact.gif" alt="" width="600">
+</p>
+<p align="center">
+  Droplet impact on dry surface (single component, multiphase simulation, density ratio: 350, fluid modeled using Peng-Robinson EOS).
+</p>
 
 ## Key Features
 - **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
