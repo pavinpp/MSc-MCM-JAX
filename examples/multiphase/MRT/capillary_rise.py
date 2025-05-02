@@ -15,7 +15,7 @@ from src.eos import VanderWaal
 
 import jax
 
-jax.config.update("jax_default_matmul_precision", "highest")
+# jax.config.update("jax_default_matmul_precision", "highest")
 
 
 # Estimate surface tension

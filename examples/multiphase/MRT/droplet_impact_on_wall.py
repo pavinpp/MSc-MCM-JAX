@@ -22,7 +22,7 @@ import phantomgaze as pg
 import jax
 import jax.numpy as jnp
 
-jax.config.update("jax_default_matmul_precision", "float32")
+# jax.config.update("jax_default_matmul_precision", "float32")
 
 
 class DropletOnWall3D(MultiphaseMRT):

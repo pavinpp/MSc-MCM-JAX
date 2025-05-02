@@ -12,6 +12,97 @@ from jax import jit, vmap
 from jax.tree import map, reduce
 import jax.numpy as jnp
 
+import jax
+
+jax.config.update("jax_default_matmul_precision", "float32")
+
+
+class Droplet2D(MultiphaseMRT):
+    def initialize_macroscopic_fields(self):
+        x = np.linspace(0, self.nx - 1, self.nx, dtype=int)
+        y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
+        x, y = np.meshgrid(x, y)
+
+        rho_tree = []
+
+        rho_l = (1 - fraction) * rho_t
+        rho_g = fraction * rho_t
+        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2)
+
+        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
+
+        rho = rho.reshape((self.nx, self.ny, 1))
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
+        rho = self.precisionPolicy.cast_to_output(rho)
+        rho_tree.append(rho)
+
+        rho_l = fraction * rho_t
+        rho_g = (1 - fraction) * rho_t
+        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2)
+
+        rho = 0.5 * (rho_l + rho_g) - 0.5 * (rho_l - rho_g) * np.tanh(2 * (dist - r) / width)
+
+        rho = rho.reshape((self.nx, self.ny, 1))
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
+        rho = self.precisionPolicy.cast_to_output(rho)
+        rho_tree.append(rho)
+
+        u = np.zeros((self.nx, self.ny, 2))
+        u = self.distributed_array_init((self.nx, self.ny, 2), self.precisionPolicy.compute_dtype, init_val=u)
+        u = self.precisionPolicy.cast_to_output(u)
+        u_tree = []
+        u_tree.append(u)
+        u_tree.append(u)
+
+        return rho_tree, u_tree
+
+    @partial(jit, static_argnums=(0,))
+    def compute_potential(self, rho_tree):
+        U_tree = map(lambda rho: jnp.zeros_like(rho), rho_tree)
+        return rho_tree, U_tree
+
+    @partial(jit, static_argnums=(0,))
+    def compute_pressure(self, rho_tree, psi_tree):
+        def f(g_kk):
+            return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
+
+        return map(
+            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
+            rho_tree,
+            psi_tree,
+            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
+        )
+
+    def output_data(self, **kwargs):
+        # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
+        rho = np.array(kwargs["rho_tree"][0][0, ...])
+        p = np.array(kwargs["p"][0, ...])
+        p_d = np.array(kwargs["p_tree"][0][...])
+        p_i = np.array(kwargs["p_tree"][1][...])
+        u = np.array(kwargs["u_tree"][0][0, ...])
+        timestep = kwargs["timestep"]
+        fields = {
+            "p": p[..., 0],
+            "rho": rho[..., 0],
+            "ux": u[..., 0],
+            "uy": u[..., 1],
+        }
+        offset_x = 95
+        offset_y = 95
+        p_north = p_d[self.nx // 2, self.ny // 2 - offset_y, 0]
+        p_south = p_d[self.nx // 2, self.ny // 2 + offset_y, 0]
+        p_west = p_d[self.nx // 2 - offset_x, self.ny // 2, 0]
+        p_east = p_d[self.nx // 2 + offset_x, self.ny // 2, 0]
+        pressure_difference = p_i[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
+        print(f"Pressure difference: {pressure_difference}")
+        save_fields_vtk(
+            timestep,
+            fields,
+            f"output_{r}",
+            "data",
+        )
+        file.write(f"{r},{pressure_difference}\n")
+
 
 class CapillaryFingering(MultiphaseMRT):
     def initialize_macroscopic_fields(self):
@@ -223,9 +314,6 @@ class CapillaryFingering(MultiphaseMRT):
 if __name__ == "__main__":
     precision = "f32/f32"
 
-    nx = 500
-    ny = 76
-
     tau_2 = 1.9
     v_2 = (tau_2 - 0.5) / 3
 
@@ -244,9 +332,10 @@ if __name__ == "__main__":
     g = 0.57
     g_kkprime[0, 1] = g
     g_kkprime[1, 0] = g
-    Lx = nx // 2
     e = LatticeD2Q9().c.T
     en = np.linalg.norm(e, axis=1)
+
+    width = 3
 
     M = np.zeros((9, 9))
     M[0, :] = en**0
@@ -266,6 +355,50 @@ if __name__ == "__main__":
     s_q = [1.0, 1.0]
     s_v = [1 / tau_1, 1 / tau_2]
 
+    nx = 200
+    ny = 200
+
+    os.system("rm -rf output*/ *.vtk surface_tension.txt")
+    file = open("surface_tension.txt", "w")
+    file.write("Radius,Pressure Difference\n")
+    for r in [25, 30, 35, 40, 45]:
+        kwargs = {
+            "n_components": 2,
+            "lattice": LatticeD2Q9(precision),
+            "nx": nx,
+            "ny": ny,
+            "nz": 0,
+            "g_kkprime": g_kkprime,
+            "body_force": [0.0, 0.0],
+            "omega": s_v,
+            "precision": precision,
+            "M": [M, M],
+            "s_rho": s_rho,
+            "s_e": s_e,
+            "s_eta": s_eta,
+            "s_j": s_j,
+            "s_q": s_q,
+            "s_v": s_v,
+            "kappa": [0.0, 0.0],
+            "k": [0, 0],
+            "A": np.zeros((2, 2)),
+            "io_rate": 30000,
+            "compute_MLUPS": False,
+            "print_info_rate": 30000,
+            "checkpoint_rate": -1,
+            "checkpoint_dir": os.path.abspath("./checkpoints_"),
+            "restore_checkpoint": False,
+        }
+        sim = Droplet2D(**kwargs)
+        sim.run(30000)
+    file.close()
+    exit()
+
+    nx = 500
+    ny = 76
+
+    Lx = nx // 2
+
     # Contact angle of the invading fluid
     c1 = np.pi / 2
     c2 = np.pi - c1
@@ -279,8 +412,8 @@ if __name__ == "__main__":
 
     delta_rho_1 = np.zeros((nx, ny, 1))
     delta_rho_2 = np.zeros((nx, ny, 1))
-
     os.system("rm -rf output*/ *.vtk")
+
     # for fx in [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]:
     for fx in [2.8]:
         kwargs = {
