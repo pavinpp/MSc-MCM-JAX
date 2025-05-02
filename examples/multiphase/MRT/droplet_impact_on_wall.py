@@ -22,7 +22,7 @@ import phantomgaze as pg
 import jax
 import jax.numpy as jnp
 
-# jax.config.update("jax_default_matmul_precision", "float32")
+jax.config.update("jax_default_matmul_precision", "float32")
 
 
 class DropletOnWall3D(MultiphaseMRT):
@@ -144,11 +144,6 @@ if __name__ == "__main__":
     rho_g = 0.025644451
     Tc = 0.1093785558
     T = 0.7 * Tc
-
-    theta = (10 * np.pi / 180) * np.ones((nx, ny, nz, 1))
-    phi = 1.1 * np.ones((nx, ny, nz, 1))
-    phi[:, 0, ...] = 1.0
-    delta_rho = np.zeros((nx, ny, nz, 1))
 
     kwargs = {
         "a": a,
