@@ -71,6 +71,10 @@ and **VanderWaals**.
 gEOS-LB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any 
 user modification.
 
+## Wetting model
+- Wetting behavior of fluids is modeled using the [improved virtual density scheme](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.100.053313) which avoids the need to include separate fluid-solid interaction forces commonly seen in Shan-Chen method by directly updating the near-wall densities
+- Wetting parameters can be passed by user while defining wall boundary conditions. 
+
 ### Collision Models
 - **BGK**
 - **Multi-Relaxation Time (MRT)**

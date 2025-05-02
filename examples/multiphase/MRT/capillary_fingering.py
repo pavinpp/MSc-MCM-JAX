@@ -392,7 +392,6 @@ if __name__ == "__main__":
         sim = Droplet2D(**kwargs)
         sim.run(30000)
     file.close()
-    exit()
 
     nx = 500
     ny = 76
