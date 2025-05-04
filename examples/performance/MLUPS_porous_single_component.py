@@ -12,14 +12,13 @@ from src.multiphase import MultiphaseBGK
 from src.boundary_conditions import BounceBack, Regularized
 
 from functools import partial
-from jax import jit, vmap
+from jax import jit, vmap, config
 from jax.tree import map, reduce
 
 import jax.numpy as jnp
 import h5py
 
 
-# Run on A5500 (24GB) and RTX8000 (48GB)
 class PorousMedia(MultiphaseBGK):
     def initialize_macroscopic_fields(self):
         rho_tree = []
@@ -136,6 +135,10 @@ if __name__ == "__main__":
 
     Precision = ["f32/f16", "f32/f32", "f64/f16", "f64/f32", "f64/f64"]
     for precision in Precision:
+        if precision in ["f64/f16", "f64/f32", "f64/f64"]:
+            config.update("jax_default_matmul_precision", "highest")
+        else:
+            config.update("jax_default_matmul_precision", "float32")
         print(f"Precision: {precision}")
         kwargs = {
             "n_components": 1,
