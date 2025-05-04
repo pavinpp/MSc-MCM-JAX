@@ -290,54 +290,36 @@ class MRTSim(LBMBase):
         )
         self.M = jnp.array(np.transpose(kwargs.get("M")), dtype=self.precisionPolicy.compute_dtype)
         if isinstance(self.lattice, LatticeD2Q9):
-            self.S = map(
-                lambda s_rho, s_e, s_eta, s_j, s_q, s_v: jnp.array(
-                    np.diag([s_rho, s_e, s_eta, s_j, s_q, s_j, s_q, s_v, s_v]),
-                    dtype=self.precisionPolicy.compute_dtype,
-                ),
-                self.s_rho,
-                self.s_e,
-                self.s_eta,
-                self.s_j,
-                self.s_q,
-                self.s_v,
+            self.S = jnp.array(
+                np.diag([self.s_rho, self.s_e, self.s_eta, self.s_j, self.s_q, self.s_j, self.s_q, self.s_v, self.s_v]),
+                dtype=self.precisionPolicy.compute_dtype,
             )
         elif isinstance(self.lattice, LatticeD3Q19):
             self.s_pi = kwargs.get("s_pi")
             self.s_m = kwargs.get("s_m")
-            self.S = map(
-                lambda s_rho, s_e, s_eta, s_j, s_q, s_v, s_pi, s_m: jnp.array(
-                    np.diag([
-                        s_rho,
-                        s_e,
-                        s_eta,
-                        s_j,
-                        s_q,
-                        s_j,
-                        s_q,
-                        s_j,
-                        s_q,
-                        s_v,
-                        s_pi,
-                        s_v,
-                        s_pi,
-                        s_v,
-                        s_v,
-                        s_v,
-                        s_m,
-                        s_m,
-                        s_m,
-                    ]),
-                    dtype=self.precisionPolicy.compute_dtype,
-                ),
-                self.s_rho,
-                self.s_e,
-                self.s_eta,
-                self.s_j,
-                self.s_q,
-                self.s_v,
-                self.s_pi,
-                self.s_m,
+            self.S = jnp.array(
+                np.diag([
+                    self.s_rho,
+                    self.s_e,
+                    self.s_eta,
+                    self.s_j,
+                    self.s_q,
+                    self.s_j,
+                    self.s_q,
+                    self.s_j,
+                    self.s_q,
+                    self.s_v,
+                    self.s_pi,
+                    self.s_v,
+                    self.s_pi,
+                    self.s_v,
+                    self.s_v,
+                    self.s_v,
+                    self.s_m,
+                    self.s_m,
+                    self.s_m,
+                ]),
+                dtype=self.precisionPolicy.compute_dtype,
             )
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
@@ -375,105 +357,89 @@ class CLBMSim(LBMBase):
         self.s_2 = kwargs.get("s_2")
         self.s_3 = kwargs.get("s_3")
         self.s_4 = kwargs.get("s_4")
+        self.s_v = self.omega
         if isinstance(self.lattice, LatticeD2Q9):
-            self.S = map(
-                lambda s_0, s_1, s_b, s_2, s_3, s_4: jnp.array(
-                    np.diag([s_0, s_1, s_1, s_b, s_2, s_2, s_3, s_3, s_4]),
-                    dtype=self.precisionPolicy.compute_dtype,
-                ),
-                self.s_0,
-                self.s_1,
-                self.s_b,
-                self.s_2,
-                self.s_3,
-                self.s_4,
+            self.S = jnp.array(
+                np.diag([self.s_0, self.s_1, self.s_1, self.s_b, self.s_2, self.s_2, self.s_3, self.s_3, self.s_4]),
+                dtype=self.precisionPolicy.compute_dtype,
             )
         elif isinstance(self.lattice, LatticeD3Q19):
-            self.s_plus = map(lambda s_b, s_2: (s_b + 2 * s_2) / 3, self.s_b, self.s_2)
-            self.s_minus = map(lambda s_b, s_2: (s_b - s_2) / 3, self.s_b, self.s_2)
+            self.s_plus = (self.s_b + 2 * self.s_2) / 3
+            self.s_minus = (self.s_b - self.s_2) / 3
 
-            def f(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4):
-                S = np.diag([s_0, s_1, s_1, s_1, s_v, s_v, s_v, s_plus, s_plus, s_plus, s_3, s_3, s_3, s_3, s_3, s_3, s_4, s_4, s_4])
-                S[7, 8] = s_minus
-                S[7, 9] = s_minus
-                S[8, 7] = s_minus
-                S[8, 9] = s_minus
-                S[9, 7] = s_minus
-                S[9, 8] = s_minus
-                return jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
-
-            self.S = map(
-                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_4: f(s_0, s_1, s_v, s_plus, s_minus, s_3, s_4),
+            S = np.diag([
                 self.s_0,
                 self.s_1,
-                self.s_2,
+                self.s_1,
+                self.s_1,
+                self.s_v,
+                self.s_v,
+                self.s_v,
                 self.s_plus,
-                self.s_minus,
+                self.s_plus,
+                self.s_plus,
+                self.s_3,
+                self.s_3,
+                self.s_3,
+                self.s_3,
+                self.s_3,
                 self.s_3,
                 self.s_4,
-            )
+                self.s_4,
+                self.s_4,
+            ])
+            S[7, 8] = self.s_minus
+            S[7, 9] = self.s_minus
+            S[8, 7] = self.s_minus
+            S[8, 9] = self.s_minus
+            S[9, 7] = self.s_minus
+            S[9, 8] = self.s_minus
+            self.S = jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
+
         elif isinstance(self.lattice, LatticeD3Q27):
-            self.s_plus = map(lambda s_b, s_2: (s_b + 2 * s_2) / 3, self.s_b, self.s_2)
-            self.s_minus = map(lambda s_b, s_2: (s_b - s_2) / 3, self.s_b, self.s_2)
+            self.s_plus = (self.s_b + 2 * self.s_2) / 3
+            self.s_minus = (self.s_b - self.s_2) / 3
             self.s_3b = kwargs.get("s_3b")
             self.s_4b = kwargs.get("s_4b")
             self.s_5 = kwargs.get("s_5")
             self.s_6 = kwargs.get("s_6")
 
-            def f(s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6):
-                S = np.diag([
-                    s_0,
-                    s_1,
-                    s_1,
-                    s_1,
-                    s_v,
-                    s_v,
-                    s_v,
-                    s_plus,
-                    s_plus,
-                    s_plus,
-                    s_3,
-                    s_3,
-                    s_3,
-                    s_3,
-                    s_3,
-                    s_3,
-                    s_3b,
-                    s_4,
-                    s_4,
-                    s_4,
-                    s_4b,
-                    s_4b,
-                    s_4b,
-                    s_5,
-                    s_5,
-                    s_5,
-                    s_6,
-                ])
-                S[7, 8] = s_minus
-                S[7, 9] = s_minus
-                S[8, 7] = s_minus
-                S[8, 9] = s_minus
-                S[9, 7] = s_minus
-                S[9, 8] = s_minus
-                return jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
-
-            self.S = map(
-                lambda s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6: f(
-                    s_0, s_1, s_v, s_plus, s_minus, s_3, s_3b, s_4, s_4b, s_5, s_6
-                ),
+            S = np.diag([
                 self.s_0,
                 self.s_1,
-                self.s_2,
+                self.s_1,
+                self.s_1,
+                self.s_v,
+                self.s_v,
+                self.s_v,
                 self.s_plus,
-                self.s_minus,
+                self.s_plus,
+                self.s_plus,
+                self.s_3,
+                self.s_3,
+                self.s_3,
+                self.s_3,
+                self.s_3,
                 self.s_3,
                 self.s_3b,
                 self.s_4,
+                self.s_4,
+                self.s_4,
+                self.s_4b,
+                self.s_4b,
                 self.s_4b,
                 self.s_5,
+                self.s_5,
+                self.s_5,
                 self.s_6,
-            )
+            ])
+            S[7, 8] = self.s_minus
+            S[7, 9] = self.s_minus
+            S[8, 7] = self.s_minus
+            S[8, 9] = self.s_minus
+            S[9, 7] = self.s_minus
+            S[9, 8] = self.s_minus
+            self.S = jnp.array(S, dtype=self.precisionPolicy.compute_dtype)
 
     @partial(jit, static_argnums=(0,), inline=True)
     def macroscopic_velocity(self, f, rho):
@@ -496,9 +462,8 @@ class CLBMSim(LBMBase):
         # rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
         u = jnp.dot(f, c) / rho
-        F = self.get_force()
-        if F is not None:
-            return u + 0.5 * F / rho
+        if self.force is not None:
+            return u + 0.5 * self.force / rho
         else:
             return u
 
