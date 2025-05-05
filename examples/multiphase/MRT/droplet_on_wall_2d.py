@@ -82,7 +82,7 @@ if __name__ == "__main__":
     x = x.T
     y = y.T
     circ = (x - nx / 2) ** 2 + (y - ny / 2 + 20) ** 2 - R**2
-    ind = np.array(np.where(circ <= 0)).T
+    ind = np.array(np.where(circ <= 0), dtype=int).T
 
     visc = 0.15
     tau = 3 * visc + 0.5

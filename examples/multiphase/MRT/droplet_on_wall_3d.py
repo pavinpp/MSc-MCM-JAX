@@ -44,8 +44,8 @@ class DropletOnWall3D(MultiphaseMRT):
                 self.gridInfo,
                 self.precisionPolicy,
                 theta[ind],
-                phi[theta],
-                delta_rho[theta],
+                phi[ind],
+                delta_rho[ind],
             )
         )
 
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     z = np.linspace(0, nz - 1, nz)
     x, y, z = np.meshgrid(x, y, z)
     sphere = (x - nx / 2) ** 2 + (y - ny / 2) ** 2 + (z - nz / 2 + 20) ** 2 - R**2
-    ind = np.array(np.where(sphere <= 0))
+    ind = np.array(np.where(sphere <= 0), dtype=int)
     ind = tuple(ind)
 
     visc = 0.15
