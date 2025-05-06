@@ -881,11 +881,18 @@ class Multiphase(LBMBase):
                     fout = fout.at[bc.indices].set(bc.apply(fout, fin))
             return fout
 
-        for i in range(self.n_components):
-            for bc in self.BCs[i]:
-                fout_tree[i] = _apply_bc_(fin_tree[i], fout_tree[i], bc)
+        # for i in range(self.n_components):
+        #     for bc in self.BCs[i]:
+        #         fout_tree[i] = _apply_bc_(fin_tree[i], fout_tree[i], bc)
+        #
+        # return fout_tree
 
-        return fout_tree
+        def __apply_bc__(fout, fin, BCs):
+            for bc in BCs:
+                fout = _apply_bc_(fin, fout, bc)
+            return fout
+
+        return map(lambda fout, fin, BCs: __apply_bc__(fout, fin, BCs), fout_tree, fin_tree, self.BCs)
 
     @partial(jit, static_argnums=(0, 3), donate_argnums=(1,))
     def step(self, f_poststreaming_tree, timestep, return_fpost=False):
