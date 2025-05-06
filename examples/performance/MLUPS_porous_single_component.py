@@ -71,10 +71,6 @@ class PorousMedia(MultiphaseBGK):
         )
 
         # Wall boundary condition
-        idx = np.zeros((len(ind[0]), 3), dtype=int)
-        idx[:, 0] = ind[0]
-        idx[:, 1] = ind[1]
-        idx[:, 2] = ind[2]
         wall = np.concatenate((
             idx,
             self.boundingBoxIndices["top"],
@@ -113,7 +109,7 @@ class PorousMedia(MultiphaseBGK):
 
 if __name__ == "__main__":
     g_kkprime = 0 * np.ones((1, 1))
-    nx = 300
+    nx = 480
     ny = 300
     nz = 300
     geometry = h5py.File("./assets/574_05_480.mat", "r")
@@ -126,12 +122,17 @@ if __name__ == "__main__":
     # geometry = h5py.File("./assets/segmented-kongju.mat", "r")
     # binary = np.array(geometry["berea"], dtype=int)
 
-    binary = binary[0:nx, 0:ny, 0:nz]
+    binary = binary[:, 0:ny, 0:nz]
     ind = np.where(binary == 1.0)
 
     theta = (np.pi / 2) * np.ones((nx, ny, nz, 1))
     phi = np.ones((nx, ny, nz, 1))
     delta_rho = np.zeros((nx, ny, nz, 1))
+
+    idx = np.zeros((len(ind[0]), 3), dtype=int)
+    idx[:, 0] = ind[0]
+    idx[:, 1] = ind[1]
+    idx[:, 2] = ind[2]
 
     Precision = ["f32/f16", "f32/f32", "f64/f16", "f64/f32", "f64/f64"]
     for precision in Precision:
