@@ -3,12 +3,12 @@ Drainage simulation for a Berea sandstone. First the 2 component droplet case an
 performed for identifying the values of various parameters.
 
 The Berea sandstone geometry used in this paper is taken from Digital Rocks Portal:
-1. Dataset of 3D fluid phase distribution from drainage simulations (in micromodel and real rock geometry) examining inertial effects>
-Yu Chen, Albert J. Valocchi, Qinjun Kang and Hari S. Viswananthan. Pore-scale simulation of fluid displacement in micromodels and real rock samples using the CSF-based lattice Boltzmann multiphase model and geometrical wetting model. Interpore 11th Annual Meeting. 2019.
-https://www.digitalrocksportal.org/projects/234/publications/
+1. E. Santos, Javier, Chang, Bernard, Kang, Qinjun, Viswanathan, Hari, Lubbers, Nicholas, Gigliotti, Alex, Prodanovic, Masa.
+"3D Dataset of Simulations." Digital Rocks Portal,  Digital Rocks Portal, https://www.doi.org/10.17612/93pd-y471.
 
 The collision matrix is based on:
-1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+1. Coveney, P. V. et al. Multiple–relaxation–time lattice Boltzmann models in three dimensions. Philosophical Transactions of the Royal Society of
+London. Series A: Mathematical, Physical and Engineering Sciences 360, 437–451 (2002).
 """
 
 import os

@@ -5,7 +5,8 @@ set interaction strengths can be use equivalent size domain and then compute con
 good enough.
 
 The collision matrix is based on:
-1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+1. Coveney, P. V. et al. Multiple–relaxation–time lattice Boltzmann models in three dimensions. Philosophical Transactions of the Royal Society of London.
+Series A: Mathematical, Physical and Engineering Sciences 360, 437–451 (2002).
 """
 
 import os

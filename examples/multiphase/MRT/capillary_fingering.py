@@ -1,3 +1,12 @@
+"""
+Single component capillary fingering example where liquid spontaneously imbibes into parallel plates. The density of each region is computed using
+Maxwell's Construction. The density profile is initialized with smooth profile with specified interface width.
+Boundary conditions are periodic everywhere expect the walls, where it is no-slip.
+
+The collision matrix is based on:
+1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
+"""
+
 import os
 import operator
 import numpy as np
