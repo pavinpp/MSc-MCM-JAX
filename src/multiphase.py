@@ -361,9 +361,10 @@ class Multiphase(LBMBase):
                         InterpolatedBounceBackDifferentiable,
                     ),
                 ):
-                    rho = rho.at[bc.indices].set(
-                        (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices]) + (bc.theta > jnp.pi / 2) * (rho_ave[bc.indices] - bc.delta_rho)
-                    )
+                    if bc.theta is not None:
+                        rho = rho.at[bc.indices].set(
+                            (bc.theta <= jnp.pi / 2) * (bc.phi * rho_ave[bc.indices]) + (bc.theta > jnp.pi / 2) * (rho_ave[bc.indices] - bc.delta_rho)
+                        )
                     rho = jnp.clip(rho, min=rho_min, max=rho_max)
             return rho
 
