@@ -1257,7 +1257,7 @@ class ConvectiveOutflow(BoundaryCondition):
     Attributes
     ----------
     name : str
-        The name of the boundary condition. For this class, it is "ExtrapolationOutflow".
+        The name of the boundary condition. For this class, it is "ConvectiveOutflow".
 
     References
     ----------
@@ -1268,15 +1268,27 @@ class ConvectiveOutflow(BoundaryCondition):
     def __init__(self, indices, gridInfo, precision_policy):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "ConvectiveOutflow"
-        self.needsExtraConfiguration = False
+        self.needsExtraConfiguration = True
         self.neighbors_found = False
+
+    def configure(self, boundaryMask):
+        """
+        Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
+        are assigned this type of BC.
+        """
+        nv = np.dot(self.lattice.c, ~boundaryMask.T)
+        corner_voxels = np.count_nonzero(nv, axis=0) > 1
+        # removed_voxels = np.array(self.indices)[:, corner_voxels]
+        self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
+        self.normals = self.normals[~corner_voxels]
+        return
 
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
         self.indices_nbr = tuple(ind.T)
 
     @partial(jit, static_argnums=(0,))
-    def apply(self, fout, fin):
+    def apply(self, fout, _):
         """
         Applies the convective outflow boundary condition.
 
@@ -1284,8 +1296,8 @@ class ConvectiveOutflow(BoundaryCondition):
         ----------
         fout : jax.numpy.ndarray
             The output distribution functions.
-        fin : jax.numpy.ndarray
-            The input distribution functions.
+        _: jax.numpy.ndarray
+            The input distribution functions, not used in this function
 
         Returns
         -------
@@ -1306,3 +1318,42 @@ class ConvectiveOutflow(BoundaryCondition):
         fbd = fout[self.indices]
         fbd = (fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc)
         return fbd
+
+
+class NonEquilibriumExtrapolation(BoundaryCondition):
+    """
+    Non-equilibrium extrapolation boundary condition.
+
+    Attributes
+    ----------
+    name : str
+        The name of the boundary condition. For this class, it is "NonEquilibriumExtrapolation".
+
+    References
+    ----------
+    1. Zhao-Li, G., Chu-Guang, Z. & Bao-Chang, S. Non-equilibrium extrapolation method for velocity and pressure boundary conditions in the lattice
+    Boltzmann method. Chinese Phys. 11, 366–374 (2002).
+    """
+
+    def __init__(self, indices, gridInfo, precisionPolicy):
+        super().__init__(indices, gridInfo, precisionPolicy)
+        self.name = "NonEquilibriumExtrapolation"
+        self.needsExtraConfiguration = False
+
+    @partial(jit, static_argnums=(0,))
+    def apply(self, fout, _):
+        """
+        Applies the non-equilibrium extrapolation boundary condition.
+
+        Parameters
+        ----------
+        fout : jax.numpy.ndarray
+            The output distribution functions.
+        _: jax.numpy.ndarray
+            The input distribution functions, not used in this function
+
+        Returns
+        -------
+        jax.numpy.ndarray
+            The modified output distribution functions after applying the boundary condition.
+        """
