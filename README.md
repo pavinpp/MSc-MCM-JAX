@@ -5,7 +5,7 @@ gEOS-LB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D
 inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://github.com/Autodesk/XLB) and adds support multiphase and multiphysics flows to the original library.
 
 ## Showcase
-<p align="center">
+<!-- <p align="center">
   <img src="assets/capillary_fingering.gif" alt="" width="600">
 </p>
 <p align="center" width="300">
@@ -16,7 +16,7 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
 </p>
 <p align="center" width="300">
   Capillary rise in parallel plates (single component, multiphase simulation)
-</p>
+</p> -->
 <p align="center">
   <img src="assets/droplet_impact.gif" alt="" width="600">
 </p>
@@ -24,7 +24,12 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
   On GPU in-situ rendering using <a href="https://github.com/loliverhennigh/PhantomGaze">PhantomGaze</a> library (no I/O). Droplet impact on dry surface using MRT collision model with ~16 million cells.
   (single component, multiphase simulation, density ratio: 350, fluid modeled using Peng-Robinson EOS).
 </p>
-
+<p align="center">
+  <img src="assets/drainage.gif" alt="" width="600">
+</p>
+<p align="center">
+  In-situ GPU rendering of drainage in a porous geometry.
+</p>
 <p align="center">
   <img src="assets/car.png" alt="" width="500">
 </p>
