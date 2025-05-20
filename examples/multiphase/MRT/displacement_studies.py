@@ -2,7 +2,7 @@
 Drainage simulation for a Berea sandstone. First the 2 component droplet case and 2 component droplet on wall case is
 performed for identifying the values of various parameters.
 
-The Berea sandstone geometry used in this paper is taken from Digital Rocks Portal:
+The Berea sandstone geometry used here is taken from Digital Rocks Portal:
 1. E. Santos, Javier, Chang, Bernard, Kang, Qinjun, Viswanathan, Hari, Lubbers, Nicholas, Gigliotti, Alex, Prodanovic, Masa.
 "3D Dataset of Simulations." Digital Rocks Portal,  Digital Rocks Portal, https://www.doi.org/10.17612/93pd-y471.
 
