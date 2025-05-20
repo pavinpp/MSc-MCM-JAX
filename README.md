@@ -28,7 +28,7 @@ inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://g
   <img src="assets/drainage.gif" alt="" width="600">
 </p>
 <p align="center">
-  In-situ GPU rendering of drainage in a porous geometry.
+  In-situ GPU rendering of drainage in a porous geometry. BGK collision model, 110 million cells.
 </p>
 <p align="center">
   <img src="assets/car.png" alt="" width="500">
