@@ -8,7 +8,7 @@ The spherepack geometry used here is taken from Digital Rocks Portal and has por
 
 from src.lattice import LatticeD3Q19
 from src.multiphase import MultiphaseBGK
-from src.boundary_conditions import BounceBack, Regularized, EquilibriumBC
+from src.boundary_conditions import BounceBack, EquilibriumBC
 from src.utils import save_fields_vtk
 
 import h5py
