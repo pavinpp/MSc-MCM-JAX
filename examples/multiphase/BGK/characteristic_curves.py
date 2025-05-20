@@ -92,9 +92,6 @@ class Droplet3D(MultiphaseBGK):
         rho_air = np.array(kwargs["rho_tree"][1][0, ...])
         p_water = np.array(kwargs["p_tree"][0][...])
         p_air = np.array(kwargs["p_tree"][1][...])
-        p = np.array(kwargs["p"][0, ...])
-        u_water = np.array(kwargs["u_tree"][0][0, ...])
-        u_air = np.array(kwargs["u_tree"][1][0, ...])
         u = np.array(kwargs["u_total"][0, ...])
         timestep = kwargs["timestep"]
         fields = {
@@ -331,7 +328,6 @@ class PorousMedia(MultiphaseBGK):
         if simulation == "imbibition":
             inlet = self.boundingBoxIndices["left"]
             rho_inlet = (rho_w_g + drho) * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-            # 0.0043
             vel = 0.004 * np.ones((inlet.shape[0], 3), dtype=self.precisionPolicy.compute_dtype)
             self.BCs[0].append(EquilibriumBC(tuple(inlet.T), self.gridInfo, self.precisionPolicy, rho_inlet, vel))
             rho_inlet = (rho_a_l + drho) * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
@@ -492,9 +488,6 @@ class PorousMedia(MultiphaseBGK):
         rho_water = rho_water[buffer : buffer + self.nx, ...]
         rho_air = rho_air[buffer : buffer + self.nx, ...]
         porous = np.array(self.solid_mask_streamed[0][buffer : buffer + self.nx, 1:-1, 1:-1, 0])
-        # print(
-        #     f"Porosity: {1 - np.sum(porous)/(porous.shape[0] * porous.shape[1] * porous.shape[2])}"
-        # )
         p_water = p_water[buffer : buffer + self.nx, ...]
         p_air = p_air[buffer : buffer + self.nx, ...]
         water = (rho_water > rho_air)[..., 0]
