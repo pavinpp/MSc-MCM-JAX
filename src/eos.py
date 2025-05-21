@@ -95,6 +95,10 @@ class EOS:
     def EOS_thermal(self, rho_tree, T):
         pass
 
+    @partial(jit, static_argnums=(0,), inline=True)
+    def drho_dT(self, rho_tree, T):
+        pass
+
 
 class VanderWaal(EOS):
     """
@@ -102,9 +106,9 @@ class VanderWaal(EOS):
 
     Parameters
     ----------
-    a: float or list
-    b: float or list
-    R: float or list
+    a: list
+    b: list
+    R: list
     T: float or jax.numpy.ndarray
 
     Reference
@@ -131,6 +135,11 @@ class VanderWaal(EOS):
         eos = lambda a, b, R, rho: (rho * R * T) / (1.0 - b * rho) - a * rho**2
         return map(eos, self.a, self.b, self.R, rho_tree)
 
+    @partial(jit, static_argnums=(0,), inline=True)
+    def drho_dT(self, rho_tree, T):
+        drho_dT = lambda b, R, rho: (rho * R) / (1.0 - b * rho)
+        return map(lambda b, R, rho: drho_dT(b, R, rho), self.b, self.R, rho_tree)
+
 
 class Redlich_Kwong(EOS):
     """
@@ -138,9 +147,9 @@ class Redlich_Kwong(EOS):
 
     Parameters
     ----------
-    a: float or list
-    b: float or list
-    R: float or list
+    a: list
+    b: list
+    R: list
     T: float or jax.numpy.ndarray
 
     Reference
@@ -167,6 +176,11 @@ class Redlich_Kwong(EOS):
         eos = lambda a, b, R, rho: (rho * R * T) / (1.0 - b * rho) - (a * rho**2) / (jnp.sqrt(T) * (1.0 + b * rho))
         return map(eos, self.a, self.b, self.R, rho_tree)
 
+    @partial(jit, static_argnums=(0,), inline=True)
+    def drho_dT(self, rho_tree, T):
+        drho_dT = lambda a, b, R, rho: (rho * R) / (1.0 - b * rho) + (0.5 * a * rho**2) / ((T**1.5) * (1.0 + b * rho))
+        return map(lambda a, b, R, rho: drho_dT(a, b, R, rho), self.a, self.b, self.R, rho_tree)
+
 
 class Redlich_Kwong_Soave(EOS):
     """
@@ -174,9 +188,9 @@ class Redlich_Kwong_Soave(EOS):
 
     Parameters
     ----------
-    a: float or list
-    b: float or list
-    R: float or list
+    a: list
+    b: list
+    R: list
     T: float or jax.numpy.ndarray
 
     Reference
@@ -226,7 +240,7 @@ class Redlich_Kwong_Soave(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS_thermal(self, rho_tree, T):
-        Tc_tree = map(
+        self.Tc_tree = map(
             lambda a, b, R: (a / b) * (0.08664 / 0.42784) * (1 / R),
             self.a,
             self.b,
@@ -235,10 +249,24 @@ class Redlich_Kwong_Soave(EOS):
         alpha_tree = map(
             lambda rks_omega, Tc: (1 + (0.480 + 1.574 * rks_omega - 0.176 * rks_omega**2) * (1 - jnp.sqrt(T / Tc))) ** 2,
             self.rks_omega,
-            Tc_tree,
+            self.Tc_tree,
         )
         eos = lambda a, b, alpha, R, rho: (rho * R * T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + b * rho)
         return map(eos, self.a, self.b, alpha_tree, self.R, rho_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def drho_dT(self, rho_tree, T):
+        dalpha_dT = (
+            lambda rks_omega, Tc: -1.0
+            * (T / Tc) ** 0.5
+            * ((1 - (T / Tc) ** 0.5) * (-0.176 * rks_omega**2 + 1.574 * rks_omega + 0.48) + 1)
+            * (-0.176 * rks_omega**2 + 1.574 * rks_omega + 0.48)
+            / T
+        )
+        drho_dT = lambda a, b, R, rho, rks_omega, Tc: (rho * R) / (1.0 - b * rho) - (a * dalpha_dT(rks_omega, Tc) * rho**2) / (1.0 + b * rho)
+        return map(
+            lambda a, b, R, rho, rks_omega, Tc: drho_dT(a, b, R, rho, rks_omega, Tc), self.a, self.b, self.R, rho_tree, self.rks_omega, self.Tc_tree
+        )
 
 
 class Peng_Robinson(EOS):
@@ -247,9 +275,9 @@ class Peng_Robinson(EOS):
 
     Parameters
     ----------
-    a: float or list
-    b: float or list
-    R: float or list
+    a: list
+    b: list
+    R: list
     T: float or jax.numpy.ndarray
 
     Reference
@@ -302,7 +330,7 @@ class Peng_Robinson(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def EOS_thermal(self, rho_tree, T):
-        Tc_tree = map(
+        self.Tc_tree = map(
             lambda a, b, R: (a / b) * (0.0778 / 0.45724) * (1 / R),
             self.a,
             self.b,
@@ -311,10 +339,26 @@ class Peng_Robinson(EOS):
         alpha_tree = map(
             lambda pr_omega, Tc: (1 + (0.37464 + 1.54226 * pr_omega - 0.26992 * pr_omega**2) * (1 - jnp.sqrt(T / Tc))) ** 2,
             self.pr_omega,
-            Tc_tree,
+            self.Tc_tree,
         )
         eos = lambda a, b, alpha, R, rho: (rho * R * T) / (1.0 - b * rho) - (a * alpha * rho**2) / (1.0 + 2 * b * rho - b**2 * rho**2)
         return map(eos, self.a, self.b, alpha_tree, self.R, rho_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def drho_dT(self, rho_tree, T):
+        dalpha_dT = (
+            lambda pr_omega, Tc: -1.0
+            * (T / Tc) ** 0.5
+            * ((1 - (T / Tc) ** 0.5) * (-0.26992 * pr_omega**2 + 1.54226 * pr_omega + 0.37464) + 1)
+            * (-0.26992 * pr_omega**2 + 1.54226 * pr_omega + 0.37464)
+            / T
+        )
+        drho_dT = lambda a, b, R, rho, pr_omega, Tc: (rho * R) / (1.0 - b * rho) - (a * dalpha_dT(pr_omega, Tc) * rho**2) / (
+            1.0 + 2 * b * rho - b**2 * rho**2
+        )
+        return map(
+            lambda a, b, R, rho, pr_omega, Tc: drho_dT(a, b, R, rho, pr_omega, Tc), self.a, self.b, self.R, rho_tree, self.pr_omega, self.Tc_tree
+        )
 
 
 class Carnahan_Starling(EOS):
@@ -323,9 +367,9 @@ class Carnahan_Starling(EOS):
 
     Parameters
     ----------
-    a: float or list
-    b: float or list
-    R: float or list
+    a: list
+    b: list
+    R: list
     T: float or jax.numpy.ndarray
 
     Reference
@@ -336,7 +380,7 @@ class Carnahan_Starling(EOS):
     Notes
     -----
     EOS is given by:
-        p = (rho*R*T)/(1 - b*rho) - (a*alpha*rho^2)/(1 + 2*b*rho - (b*rho)**2)
+        p = (rho*R*T)*(1 + (0.25*b*rho) + (0.25*b*rho)^2 - (0.25*b*rho)^3)/(1 - b*rho)^3 - (a*rho^2)
     """
 
     def __init__(self, **kwargs):
@@ -353,3 +397,9 @@ class Carnahan_Starling(EOS):
         x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
         eos = lambda a, R, rho, x: (rho * R * T * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)) - (a * rho**2)
         return map(eos, self.a, self.R, rho_tree, x_tree)
+
+    @partial(jit, static_argnums=(0,), inline=True)
+    def drho_dT(self, rho_tree, T):
+        x_tree = map(lambda b, rho: 0.25 * b * rho, self.b, rho_tree)
+        drho_dT = lambda x, R, rho: (rho * R) * (1.0 + x + x**2 - x**3) / ((1.0 - x) ** 3)
+        return map(lambda x, R, rho: drho_dT(x, R, rho), x_tree, self.R, rho_tree)
