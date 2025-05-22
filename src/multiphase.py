@@ -596,21 +596,9 @@ class Multiphase(LBMBase):
         """
         n = reduce(
             operator.add,
-            map(
-                lambda rho, u, omega: rho * u * omega,
-                rho_tree,
-                u_tree,
-                self.omega,
-            ),
+            map(lambda rho, u: rho * u, rho_tree, u_tree),
         )
-        d = reduce(
-            operator.add,
-            map(
-                lambda rho, omega: rho * omega,
-                rho_tree,
-                self.omega,
-            ),
-        )
+        d = reduce(operator.add, rho_tree)
         return n / d
 
     @partial(jit, static_argnums=(0,))
@@ -632,7 +620,7 @@ class Multiphase(LBMBase):
         return self.eos.EOS(rho_tree)
 
     @partial(jit, static_argnums=(0,))
-    def compute_total_pressure(self, p_tree):
+    def compute_total_pressure(self, p_tree, rho_tree=None):
         """
         Cpmpute the total combined pressure from all components.
 
@@ -666,19 +654,10 @@ class Multiphase(LBMBase):
         p_tree = self.compute_pressure(rho_tree)
         # Shan-Chen potential using modified pressure
         psi_tree = map(
-            lambda k, p, rho, G: jnp.sqrt(2 * (k * p - self.lattice.cs2 * rho) / G),
-            self.k,
-            p_tree,
-            rho_tree,
-            self.g_kkprime.diagonal().tolist(),
+            lambda k, p, rho, G: jnp.sqrt(2 * (k * p - self.lattice.cs2 * rho) / G), self.k, p_tree, rho_tree, self.g_kkprime.diagonal().tolist()
         )
         # Zhang-Chen potential
-        U_tree = map(
-            lambda k, p, rho: k * p - self.lattice.cs2 * rho,
-            self.k,
-            p_tree,
-            rho_tree,
-        )
+        U_tree = map(lambda k, p, rho: k * p - self.lattice.cs2 * rho, self.k, p_tree, rho_tree)
         return psi_tree, U_tree
 
     # Compute the force using the effective mass (psi) and the interaction potential (phi)
@@ -701,11 +680,7 @@ class Multiphase(LBMBase):
         fluid_fluid_force = self.compute_fluid_fluid_force(psi_tree, U_tree)
         # fluid_solid_force = self.compute_fluid_solid_force(rho_tree)
         if self.body_force is not None:
-            return map(
-                lambda ff, rho: ff + self.body_force * rho,
-                fluid_fluid_force,
-                rho_tree,
-            )
+            return map(lambda ff, rho: ff + self.body_force * rho, fluid_fluid_force, rho_tree)
         else:
             return fluid_fluid_force
 
@@ -731,10 +706,7 @@ class Multiphase(LBMBase):
             Pytree of fluid-fluid interaction force.
         """
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
-        psi_s_tree = map(
-            lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
-            psi_tree,
-        )
+        psi_s_tree = map(lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)), psi_tree)
         U_s_tree = map(lambda U: self.streaming(jnp.repeat(U, axis=-1, repeats=self.q)), U_tree)
 
         def ffk_1(Ai, g_kkprime):
@@ -998,7 +970,7 @@ class Multiphase(LBMBase):
                 )
                 psi_prev_tree, _ = self.compute_potential(rho_prev_tree)
                 p_prev_tree = self.compute_pressure(rho_prev_tree, psi_prev_tree)
-                p_prev_total = self.compute_total_pressure(p_prev_tree)
+                p_prev_total = self.compute_total_pressure(p_prev_tree, rho_prev_tree)
                 p_prev_total = downsample_field(p_prev_total, self.downsamplingFactor)
                 u_prev_tree = map(
                     lambda u_prev: downsample_field(u_prev, self.downsamplingFactor),
@@ -1034,7 +1006,7 @@ class Multiphase(LBMBase):
                 u_tree = self.macroscopic_velocity(f_tree, rho_tree)
                 psi_tree, _ = self.compute_potential(rho_tree)
                 p_tree = self.compute_pressure(rho_tree, psi_tree)
-                p_total = self.compute_total_pressure(p_tree)
+                p_total = self.compute_total_pressure(p_tree, rho_tree)
                 p_total = downsample_field(p_total, self.downsamplingFactor)
                 rho_tree = map(
                     lambda rho: downsample_field(rho, self.downsamplingFactor),
