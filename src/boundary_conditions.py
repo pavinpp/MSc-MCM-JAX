@@ -1307,6 +1307,7 @@ class ConvectiveOutflow(BoundaryCondition):
         if not self.neighbors_found:
             self.find_neighbors()
             self.neighbors_found = True
+
         f_nbr = fout[self.indices_nbr]
         rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
         u_nbr = jnp.sum(
@@ -1315,8 +1316,13 @@ class ConvectiveOutflow(BoundaryCondition):
             keepdims=True,
         )
         lambda_cbc = jnp.mean(u_nbr)
+
+        nbd = len(self.indices[0])
+        bindex = np.arange(nbd)[:, None]
+
         fbd = fout[self.indices]
-        fbd = (fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc)
+        # fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + lambda_cbc * f_nbr[bindex, self.imissing]) / (1 + lambda_cbc)
+        fbd = fbd.at[...].set((fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc))
         return fbd
 
 
@@ -1339,6 +1345,23 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         super().__init__(indices, gridInfo, precisionPolicy)
         self.name = "NonEquilibriumExtrapolation"
         self.needsExtraConfiguration = False
+        self.neighbors_found = False
+
+    def configure(self, boundaryMask):
+        """
+        Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
+        are assigned this type of BC.
+        """
+        nv = np.dot(self.lattice.c, ~boundaryMask.T)
+        corner_voxels = np.count_nonzero(nv, axis=0) > 1
+        # removed_voxels = np.array(self.indices)[:, corner_voxels]
+        self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
+        self.normals = self.normals[~corner_voxels]
+        return
+
+    def find_neighbors(self):
+        ind = np.array(self.indices).T - self.normals
+        self.indices_nbr = tuple(ind.T)
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, _):
@@ -1357,3 +1380,97 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         jax.numpy.ndarray
             The modified output distribution functions after applying the boundary condition.
         """
+        if not self.neighbors_found:
+            self.find_neighbors()
+            self.neighbors_found = True
+
+        nbd = len(self.indices[0])
+        bindex = np.arange(nbd)[:, None]
+        fbd = fout[self.indices]
+
+        f_nbr = fout[self.indices_nbr]
+        rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
+        vel_nbr = jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr
+        feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
+        fneq_nbr = f_nbr - feq_nbr
+        fbd = fbd.at[bindex, self.imissing].set(fneq_nbr[self.indices][bindex, self.imissing])
+        return fbd
+
+
+class ExactNonEquilibriumExtrapolation(BoundaryCondition):
+    """
+    Non-equilibrium extrapolation boundary condition but with added correction step to correct the density at the boundary node.
+
+    Attributes
+    ----------
+    name : str
+        The name of the boundary condition. For this class, it is "ExactNonEquilibriumExtrapolation".
+
+    References
+    ----------
+    1. Zhao-Li, G., Chu-Guang, Z. & Bao-Chang, S. Non-equilibrium extrapolation method for velocity and pressure boundary conditions in the lattice
+    Boltzmann method. Chinese Phys. 11, 366–374 (2002).
+    2. Fei, L., Qin, F., Zhao, J., Derome, D. & Carmeliet, J. Lattice Boltzmann modelling of isothermal two-component evaporation in porous media.
+    Journal of Fluid Mechanics 955, A18 (2023).
+    """
+
+    def __init__(self, indices, gridInfo, precisionPolicy):
+        super().__init__(indices, gridInfo, precisionPolicy)
+        self.name = "NonEquilibriumExtrapolation"
+        self.needsExtraConfiguration = False
+        self.neighbors_found = False
+
+    def configure(self, boundaryMask):
+        """
+        Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
+        are assigned this type of BC.
+        """
+        nv = np.dot(self.lattice.c, ~boundaryMask.T)
+        corner_voxels = np.count_nonzero(nv, axis=0) > 1
+        # removed_voxels = np.array(self.indices)[:, corner_voxels]
+        self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
+        self.normals = self.normals[~corner_voxels]
+        return
+
+    def find_neighbors(self):
+        ind = np.array(self.indices).T - self.normals
+        self.indices_nbr = tuple(ind.T)
+
+    @partial(jit, static_argnums=(0,))
+    def apply(self, fout, _):
+        """
+        Applies the non-equilibrium extrapolation boundary condition.
+
+        Parameters
+        ----------
+        fout : jax.numpy.ndarray
+            The output distribution functions.
+        _: jax.numpy.ndarray
+            The input distribution functions, not used in this function
+
+        Returns
+        -------
+        jax.numpy.ndarray
+            The modified output distribution functions after applying the boundary condition.
+        """
+        if not self.neighbors_found:
+            self.find_neighbors()
+            self.neighbors_found = True
+
+        nbd = len(self.indices[0])
+        bindex = np.arange(nbd)[:, None]
+        fbd = fout[self.indices]
+
+        f_nbr = fout[self.indices_nbr]
+        rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
+        vel_nbr = jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr
+        feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
+        fneq_nbr = f_nbr - feq_nbr
+        fbd = fbd.at[bindex, self.imissing].set(fneq_nbr[bindex, self.imissing])
+
+        # Correction step
+        rho_incorrect = jnp.sum(fbd, axis=-1, keepdims=True)
+        rho_correct = jnp.sum(fout[self.indices], axis=-1, keepdims=True)
+        beta = self.lattice.w * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.lattice.w)
+        fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + beta[bindex, self.imissing])
+        return fbd
