@@ -114,12 +114,7 @@ if __name__ == "__main__":
     s_q = [1.0]
     s_v = [1.0]
 
-    kwargs = {
-        "a": a,
-        "b": b,
-        "R": R,
-        "T": T,
-    }
+    kwargs = {"a": [a], "b": [b], "R": [R], "T": [T]}
     eos = VanderWaal(**kwargs)
 
     precision = "f32/f32"

@@ -146,13 +146,7 @@ if __name__ == "__main__":
     Tc = 0.1093785558
     T = 0.7 * Tc
 
-    kwargs = {
-        "a": a,
-        "b": b,
-        "R": R,
-        "pr_omega": pr_omega,
-        "T": T,
-    }
+    kwargs = {"a": a, "b": b, "R": R, "pr_omega": pr_omega, "T": T}
     eos = Peng_Robinson(**kwargs)
 
     theta = (12 * np.pi / 180) * np.ones((nx, ny, nz, 1))

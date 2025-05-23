@@ -145,12 +145,7 @@ if __name__ == "__main__":
     phi = np.ones((nx, ny, nz, 1))
     delta_rho = np.zeros((nx, ny, nz, 1))
 
-    kwargs = {
-        "a": a,
-        "b": b,
-        "R": R,
-        "T": T,
-    }
+    kwargs = {"a": a, "b": b, "R": R, "T": T}
     eos = VanderWaal(**kwargs)
 
     precision = "f32/f32"
