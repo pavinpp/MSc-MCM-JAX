@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 from jax import jit, device_count
 from functools import partial
+from src.lattice import LatticeD2Q9, LatticeD3Q19
 import numpy as np
 
 
@@ -1341,23 +1342,69 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
     Boltzmann method. Chinese Phys. 11, 366–374 (2002).
     """
 
-    def __init__(self, indices, gridInfo, precisionPolicy):
+    def __init__(self, indices, gridInfo, precisionPolicy, prescribed):
         super().__init__(indices, gridInfo, precisionPolicy)
         self.name = "NonEquilibriumExtrapolation"
         self.needsExtraConfiguration = False
-        self.neighbors_found = False
+        self.prescribed = prescribed
+        self.G_ff = self.compute_ff_greens_function()
+        self.find_neighbors()
 
-    def configure(self, boundaryMask):
+    # def configure(self, boundaryMask):
+    #     """
+    #     Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
+    #     are assigned this type of BC.
+    #     """
+    #     nv = np.dot(self.lattice.c, ~boundaryMask.T)
+    #     corner_voxels = np.count_nonzero(nv, axis=0) > 1
+    #     # removed_voxels = np.array(self.indices)[:, corner_voxels]
+    #     self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
+    #     self.normals = self.normals[~corner_voxels]
+    #     return
+
+    def compute_ff_greens_function(self):
         """
-        Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
-        are assigned this type of BC.
+        Define the Green's function used to compute interaction phase-phase interaction forces.
+
+        The interaction coefficient between k^th and kprime^th component: self.gkkprime[k, kprime]
+        During computation, this value is multiplied with corresponding g_kkprime value to get the Green's function:
+        G_kkprime = self.g_kk[k, k_prime] * self.G_ff
+
+        G_kkprime(x, x') = g1 * g_kkprime,  if |x - x'| = 1
+                         = g2 * g_kkprime,  if |x - x'| = sqrt(2)
+                         = 0,               otherwise
+
+        Here d is the dimension of problem and x' are the neighboring points.
+
+        Some examples values could be:
+        For D2Q9:
+            g1 = 2 and g2 = 1/2
+        For D3Q19
+            g1 = 1 and g2 = 1/2
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        G_ff: jax.numpy.ndarray.
+            Dimension: (q, )
         """
-        nv = np.dot(self.lattice.c, ~boundaryMask.T)
-        corner_voxels = np.count_nonzero(nv, axis=0) > 1
-        # removed_voxels = np.array(self.indices)[:, corner_voxels]
-        self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
-        self.normals = self.normals[~corner_voxels]
-        return
+        c = np.array(self.lattice.c).T
+        G_ff = np.zeros((self.lattice.q,), dtype=np.float64)
+        cl = np.linalg.norm(c, axis=-1)
+        if isinstance(self.lattice, LatticeD2Q9):
+            g1 = 1 / 3
+            g2 = 1 / 12
+            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+        elif isinstance(self.lattice, LatticeD3Q19):
+            g1 = 1 / 6
+            g2 = 1 / 12
+            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+        return jnp.array(G_ff, dtype=self.precisionPolicy.compute_dtype)
 
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
@@ -1380,20 +1427,18 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         jax.numpy.ndarray
             The modified output distribution functions after applying the boundary condition.
         """
-        if not self.neighbors_found:
-            self.find_neighbors()
-            self.neighbors_found = True
-
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
         fbd = fout[self.indices]
 
         f_nbr = fout[self.indices_nbr]
+        rho = jnp.sum(fbd, axis=-1, keepdims=True)
         rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
         vel_nbr = jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr
+        feq = self.equilibrium(rho, vel_nbr)
         feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
         fneq_nbr = f_nbr - feq_nbr
-        fbd = fbd.at[bindex, self.imissing].set(fneq_nbr[self.indices][bindex, self.imissing])
+        fbd = fbd.at[bindex, self.imissing].set(feq[bindex, self.imissing] + fneq_nbr[bindex, self.imissing])
         return fbd
 
 
@@ -1414,23 +1459,69 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
     Journal of Fluid Mechanics 955, A18 (2023).
     """
 
-    def __init__(self, indices, gridInfo, precisionPolicy):
+    def __init__(self, indices, gridInfo, precisionPolicy, prescribed):
         super().__init__(indices, gridInfo, precisionPolicy)
         self.name = "NonEquilibriumExtrapolation"
         self.needsExtraConfiguration = False
-        self.neighbors_found = False
+        self.prescribed = prescribed
+        self.G_ff = self.compute_ff_greens_function()
+        self.nbrs_found = False
 
-    def configure(self, boundaryMask):
+    # def configure(self, boundaryMask):
+    #     """
+    #     Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
+    #     are assigned this type of BC.
+    #     """
+    #     nv = np.dot(self.lattice.c, ~boundaryMask.T)
+    #     corner_voxels = np.count_nonzero(nv, axis=0) > 1
+    #     # removed_voxels = np.array(self.indices)[:, corner_voxels]
+    #     self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
+    #     self.normals = self.normals[~corner_voxels]
+    #     return
+
+    def compute_ff_greens_function(self):
         """
-        Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
-        are assigned this type of BC.
+        Define the Green's function used to compute interaction phase-phase interaction forces.
+
+        The interaction coefficient between k^th and kprime^th component: self.gkkprime[k, kprime]
+        During computation, this value is multiplied with corresponding g_kkprime value to get the Green's function:
+        G_kkprime = self.g_kk[k, k_prime] * self.G_ff
+
+        G_kkprime(x, x') = g1 * g_kkprime,  if |x - x'| = 1
+                         = g2 * g_kkprime,  if |x - x'| = sqrt(2)
+                         = 0,               otherwise
+
+        Here d is the dimension of problem and x' are the neighboring points.
+
+        Some examples values could be:
+        For D2Q9:
+            g1 = 2 and g2 = 1/2
+        For D3Q19
+            g1 = 1 and g2 = 1/2
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        G_ff: jax.numpy.ndarray.
+            Dimension: (q, )
         """
-        nv = np.dot(self.lattice.c, ~boundaryMask.T)
-        corner_voxels = np.count_nonzero(nv, axis=0) > 1
-        # removed_voxels = np.array(self.indices)[:, corner_voxels]
-        self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
-        self.normals = self.normals[~corner_voxels]
-        return
+        c = np.array(self.lattice.c).T
+        G_ff = np.zeros((self.lattice.q,), dtype=np.float64)
+        cl = np.linalg.norm(c, axis=-1)
+        if isinstance(self.lattice, LatticeD2Q9):
+            g1 = 1 / 3
+            g2 = 1 / 12
+            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+        elif isinstance(self.lattice, LatticeD3Q19):
+            g1 = 1 / 6
+            g2 = 1 / 12
+            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
+            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
+        return jnp.array(G_ff, dtype=self.precisionPolicy.compute_dtype)
 
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
@@ -1453,24 +1544,26 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
         jax.numpy.ndarray
             The modified output distribution functions after applying the boundary condition.
         """
-        if not self.neighbors_found:
+        if not self.nbrs_found:
             self.find_neighbors()
-            self.neighbors_found = True
+            self.nbrs_found = True
 
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
         fbd = fout[self.indices]
 
         f_nbr = fout[self.indices_nbr]
+        rho = jnp.sum(fbd, axis=-1, keepdims=True)
         rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
         vel_nbr = jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr
+        feq = self.equilibrium(rho, vel_nbr)
         feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
         fneq_nbr = f_nbr - feq_nbr
-        fbd = fbd.at[bindex, self.imissing].set(fneq_nbr[bindex, self.imissing])
+        fbd = fbd.at[bindex, self.imissing].set(feq[bindex, self.imissing] + fneq_nbr[bindex, self.imissing])
 
         # Correction step
         rho_incorrect = jnp.sum(fbd, axis=-1, keepdims=True)
-        rho_correct = jnp.sum(fout[self.indices], axis=-1, keepdims=True)
-        beta = self.lattice.w * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.lattice.w)
+        rho_correct = self.prescribed
+        beta = self.G_ff * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.G_ff)
         fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + beta[bindex, self.imissing])
         return fbd

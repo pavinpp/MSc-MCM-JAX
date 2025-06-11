@@ -507,10 +507,7 @@ class Multiphase(LBMBase):
         return f_tree
 
     @partial(jit, static_argnums=(0,), inline=True)
-    def update_macroscopic(
-        self,
-        f_tree,
-    ):
+    def update_macroscopic(self, f_tree):
         """
         update_macroscopic from base.py extended to pytrees.
 

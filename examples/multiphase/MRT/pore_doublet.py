@@ -1,6 +1,6 @@
 """
 Pore doublet example. The obstacle and branching is elliptical shaped. The simulations are performed using MRT collision model for the case of
-imbibition (wetting fluid injected). This is an example of multicomponent simulation using gEOS-LB
+imbibition (wetting fluid injected). This is an example of multicomponent simulation using JAX-LaB
 
 The collision matrix is based on:
 1. McCracken, M. E. & Abraham, J. Multiple-relaxation-time lattice-Boltzmann model for multiphase flow. Phys. Rev. E 71, 036701 (2005).
