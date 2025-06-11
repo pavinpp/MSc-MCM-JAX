@@ -1,8 +1,8 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-# gEOS-LB: A Python-based, Accelerated, Differentiable Massively Parallel Lattice Boltzmann Library for Modeling Multiphase and Multiphysics Flows & Physics-Based Machine Learning
+# JAX-LaB: A Python-based, Accelerated, Differentiable Massively Parallel Lattice Boltzmann Library for Modeling Multiphase and Multiphysics Flows & Physics-Based Machine Learning
 
-gEOS-LB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D Lattice Boltzmann Method (LBM) Python library written in [JAX](https://github.com/google/jax) and it provides a unified workflow for forward and 
-inverse modeling of multiphase flows. gEOS-LB is an extension of [XLB](https://github.com/Autodesk/XLB) and adds support multiphase and multiphysics flows to the original library.
+JAX-LaB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D Lattice Boltzmann Method (LBM) Python library written in [JAX](https://github.com/google/jax) and it provides a unified workflow for forward and 
+inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://github.com/Autodesk/XLB) and adds support multiphase and multiphysics flows to the original library.
 
 ## Showcase
 <!-- <p align="center">
@@ -55,14 +55,14 @@ The stages of a fluid density field from an initial state to the emergence of th
 
 ## Key Features
 - **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
-- **Differentiable LBM Kernels:** gEOS-LB provides differentiable LBM kernels that can be used in differentiable physics and deep learning applications.
-- **Scalability:** gEOS-LB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
-- **Support for Various LBM Boundary Conditions and Kernels:** gEOS-LB supports several LBM boundary conditions and collision kernels.
-- **Support for Multiphase, Multiphysics and Multicomponent flows**: gEOS-LB can accurately model multiphysics and multiphase flows using Shan-Chen method, simulating complex interface dynamics without tracking any interface.
-- **User-Friendly Interface:** Written entirely in Python, gEOS-LB emphasizes a highly accessible interface that allows users to extend the library with ease and quickly set up and run new simulations.
+- **Differentiable LBM Kernels:** JAX-LaB provides differentiable LBM kernels that can be used in differentiable physics and deep learning applications.
+- **Scalability:** JAX-LaB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
+- **Support for Various LBM Boundary Conditions and Kernels:** JAX-LaB supports several LBM boundary conditions and collision kernels.
+- **Support for Multiphase, Multiphysics and Multicomponent flows**: JAX-LaB can accurately model multiphysics and multiphase flows using Shan-Chen method, simulating complex interface dynamics without tracking any interface.
+- **User-Friendly Interface:** Written entirely in Python, JAX-LaB emphasizes a highly accessible interface that allows users to extend the library with ease and quickly set up and run new simulations.
 - **Leverages JAX Array and Shardmap:** The library incorporates the new JAX array unified array type and JAX shardmap, providing users with a numpy-like interface. This allows users to focus solely on the semantics, leaving performance optimizations to the compiler.
-- **Platform Versatility:** The same gEOS-LB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
-- **Visualization:** gEOS-LB provides a variety of visualization options including in-situ on GPU rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze).
+- **Platform Versatility:** The same JAX-LaB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
+- **Visualization:** JAX-LaB provides a variety of visualization options including in-situ on GPU rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze).
 
 ## Capabilities
 ### Multiphase Flow Modeling
@@ -73,7 +73,7 @@ and **VanderWaals**.
 - **Density ratio independent surface tension** control by directly modifying pressure tensor.
 - **Improved wetting scheme** to handle large range of contact angles ($5 - 170^\circ$) **without large spurious current or thick layers near solid surface**.
 ### Multicomponent Flow Support
-gEOS-LB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any 
+JAX-LaB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any 
 user modification.
 
 ## Wetting model
@@ -150,7 +150,7 @@ If you use XLB in your research, please cite the following paper:
 
 ## Installation Guide
 
-To use XLB, you must first install JAX and other dependencies using the following commands:
+To use JAX-LaB, you must first install JAX and other dependencies using the following commands:
 
 
 Please refer to https://github.com/google/jax for the latest installation documentation. The following table is taken from [JAX's Github page](https://github.com/google/jax).
@@ -173,10 +173,10 @@ pip install pyvista numpy matplotlib Rtree trimesh jmp orbax-checkpoint termcolo
 
 Run an example:
 ```bash
-git clone https://github.com/Autodesk/XLB
-cd XLB
+git clone https://github.com/piyush-ppradhan/JAX-LaB
+cd JAX-LaB
 export PYTHONPATH=.
-python3 examples/CFD/cavity2d.py
+python3 examples/singlephase/cavity2d.py
 ```
 ## Roadmap
 
