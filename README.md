@@ -129,8 +129,7 @@ user modification.
 - **Convective Outflow BC**: Convective outflow boundary condition, useful for porous media flows.
 
 ## Accompanying Paper
-
-Please refer to the [accompanying paper](https://doi.org/10.1016/j.cpc.2024.109187) for benchmarks, validation, and more details about the library.
+A preprint of the paper submitted to the Journal of Advances in Modeling Earth Systems (JAMES), presenting an overview of JAX-LaB is available on [arXiv](https://arxiv.org/abs/2506.17713).
 
 <!-- ## Citing XLB
 
