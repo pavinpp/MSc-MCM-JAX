@@ -4,6 +4,8 @@
 misc/
 pyrightconfig.json
 tasks.json
+*.sublime-build
+*.sublime-project
 
 # Outputs
 *vti
