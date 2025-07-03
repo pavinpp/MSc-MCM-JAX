@@ -17,6 +17,7 @@ tasks.json
 *mhd
 *png
 *pdf
+output*/
 # Exclusions
 !jax-lbm.png
 !airfoil.png
