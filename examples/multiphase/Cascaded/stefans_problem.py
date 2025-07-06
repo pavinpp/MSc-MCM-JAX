@@ -771,7 +771,7 @@ if __name__ == "__main__":
         "s_2": s_2,
         "s_3": s_3,
         "s_4": s_4,
-        "sigma": [0.099, 0.0],
+        "sigma": [0.102, 0.0],
         "precision": precision,
         "io_rate": 10,
         "print_info_rate": 10,
