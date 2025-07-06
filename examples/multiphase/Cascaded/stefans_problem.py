@@ -1,5 +1,5 @@
 """
-Multi-component 2D isothermal Stefans problem where liquid undergoes evaporation due to the prescribed vapor pressure gradient.
+Multi-component 2D and 3D isothermal Stefans problem where liquid undergoes evaporation due to the prescribed vapor pressure gradient.
 The boundary conditions are: periodic (left and right), no slip-wall (at the bottom)
 
 The collision matrix is based on:
@@ -740,7 +740,7 @@ if __name__ == "__main__":
     s_2 = [s2, s2]
     s_b = [0.8, 0.8]
     s_3 = [1.6, 1.6]
-    s_6 = [1.6, 1.6]
+    s_4 = [1.0, 1.0]
 
     nx = 50
     ny = 400
