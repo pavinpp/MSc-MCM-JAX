@@ -1,8 +1,10 @@
-import jax.numpy as jnp
-from jax import jit, device_count
 from functools import partial
-from src.lattice import LatticeD2Q9, LatticeD3Q19
+
+import jax.numpy as jnp
 import numpy as np
+from jax import device_count, jit
+
+from src.lattice import LatticeD2Q9, LatticeD3Q19
 
 
 class BoundaryCondition(object):
@@ -1464,7 +1466,7 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
         self.name = "NonEquilibriumExtrapolation"
         self.needsExtraConfiguration = False
         self.prescribed = prescribed
-        self.G_ff = self.compute_ff_greens_function()
+        self.w_NEQ = self.compute_NEQ_weights()
         self.nbrs_found = False
 
     # def configure(self, boundaryMask):
@@ -1479,25 +1481,23 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
     #     self.normals = self.normals[~corner_voxels]
     #     return
 
-    def compute_ff_greens_function(self):
+    def compute_NEQ_weights(self):
         """
-        Define the Green's function used to compute interaction phase-phase interaction forces.
+        Define the weight function used to correct the distribution values obtained Non-Equilibrium extrapolation boundary condition.
 
-        The interaction coefficient between k^th and kprime^th component: self.gkkprime[k, kprime]
-        During computation, this value is multiplied with corresponding g_kkprime value to get the Green's function:
-        G_kkprime = self.g_kk[k, k_prime] * self.G_ff
+        Typically, it is defined as:
 
-        G_kkprime(x, x') = g1 * g_kkprime,  if |x - x'| = 1
-                         = g2 * g_kkprime,  if |x - x'| = sqrt(2)
-                         = 0,               otherwise
+        w(i) = g1 if |x - x'| = 1
+             = g2 if |x - x'| = sqrt(2)
+             = 0, otherwise
 
         Here d is the dimension of problem and x' are the neighboring points.
 
         Some examples values could be:
         For D2Q9:
-            g1 = 2 and g2 = 1/2
+            g1 = 1/3 and g2 = 1/12
         For D3Q19
-            g1 = 1 and g2 = 1/2
+            g1 = 1/6 and g2 = 1/12
 
         Parameters
         ----------
