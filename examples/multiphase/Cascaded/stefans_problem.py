@@ -169,7 +169,7 @@ class StefansProblem2D(MultiphaseCascade):
         rho_tree = []
         y = np.linspace(0, self.ny - 1, self.ny, dtype=int)
         rho = np.ones((self.nx, self.ny, 1))
-        rho[..., 0] = 0.5 * (rho_w_l + rho_w_g) - 0.5 * (rho_w_l - rho_w_g) * np.tanh(2 * (y - L) / width)
+        rho[..., 0] = 0.5 * (rho_w_l + rho_w_g_boundary) - 0.5 * (rho_w_l - rho_w_g_boundary) * np.tanh(2 * (y - L) / width)
         rho[:, self.ny - 1, 0] = rho_w_g_boundary
         rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
@@ -374,7 +374,7 @@ class StefansProblem3D(MultiphaseCascade):
         _, y, _ = np.meshgrid(np.linspace(0, self.nx - 1, self.nx, dtype=int), y, np.linspace(0, self.nz - 1, self.nz, dtype=int))
         y = np.transpose(y, axes=(1, 0, 2))
         rho = np.ones((self.nx, self.ny, self.nz, 1))
-        rho[..., 0] = 0.5 * (rho_w_l + rho_w_g) - 0.5 * (rho_w_l - rho_w_g) * np.tanh(2 * (y - L) / width)
+        rho[..., 0] = 0.5 * (rho_w_l + rho_w_g_boundary) - 0.5 * (rho_w_l - rho_w_g_boundary) * np.tanh(2 * (y - L) / width)
         rho[:, self.ny - 1, ...] = rho_w_g_boundary
         rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
@@ -398,11 +398,13 @@ class StefansProblem3D(MultiphaseCascade):
 
     def set_boundary_conditions(self):
         bottom = self.boundingBoxIndices["front"]
+        # bottom = np.array([[x, 0, z] for x in range(self.nx) for z in range(self.nz)], dtype=int)
         self.BCs[0].append(BounceBack(tuple(bottom.T), self.gridInfo, self.precisionPolicy))
         self.BCs[1].append(BounceBack(tuple(bottom.T), self.gridInfo, self.precisionPolicy))
 
         # Define indices, used later
         top = self.boundingBoxIndices["back"]
+        # top = np.array([[x, self.ny - 1, z] for x in range(self.nx) for z in range(self.nz)], dtype=int)
         rho = rho_w_g_boundary * np.ones((top.shape[0], 1))
         self.BCs[0].append(ExactNonEquilibriumExtrapolation(tuple(top.T), self.gridInfo, self.precisionPolicy, rho))
         rho = rho_a_g_boundary * np.ones((top.shape[0], 1))
@@ -519,7 +521,7 @@ class StefansProblem3D(MultiphaseCascade):
             Fx = F_intra[..., 0]
             Fy = F_intra[..., 1]
             Fz = F_intra[..., 2]
-            eta = 6 * sigma * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
+            eta = 2 * sigma * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
             Fx = F[..., 0]
             Fy = F[..., 1]
             Fz = F[..., 2]
@@ -735,23 +737,26 @@ if __name__ == "__main__":
     M[18, :] = ey * ey * ez * ez
 
     s2 = 0.8
+    # s3 = (16 - 8 * s2) / (8 - s2)
     s_0 = [1.0, 1.0]
     s_1 = [1.0, 1.0]
     s_2 = [s2, s2]
     s_b = [0.8, 0.8]
-    s_3 = [1.6, 1.6]
+    s_3 = [1.8, 1.8]
     s_4 = [1.0, 1.0]
 
-    nx = 50
-    ny = 400
-    nz = 50
+    nx = 20
+    ny = 500
+    nz = 20
     width = 5
-    rho_a_l = 0.0019
+    rho_a_l = 0.1
     rho_a_g = 0.0019
-    rho_w_g_boundary = rho_w_g - 0.0003
-    rho_a_g_boundary = rho_a_g + 0.0003
+    rho_w_g_boundary = rho_w_g - 0.189
+    rho_a_g_boundary = rho_a_g + 0.189
+    # rho_w_l_boundary = rho_w_l - 0.189
+    # rho_a_l_boundary = rho_a_l + 0.189
     # initial liquid region width
-    L = ny // 3
+    L = 2 * ny // 5
     kwargs = {
         "n_components": 2,
         "lattice": LatticeD3Q19(precision),
@@ -771,7 +776,7 @@ if __name__ == "__main__":
         "s_2": s_2,
         "s_3": s_3,
         "s_4": s_4,
-        "sigma": [0.102, 0.0],
+        "sigma": [0.09, 0.0],
         "precision": precision,
         "io_rate": 10,
         "print_info_rate": 10,
@@ -782,4 +787,4 @@ if __name__ == "__main__":
     }
     os.system("rm -rf output*/ *.vtk")
     sim = StefansProblem3D(**kwargs)
-    sim.run(1000)
+    sim.run(100)
