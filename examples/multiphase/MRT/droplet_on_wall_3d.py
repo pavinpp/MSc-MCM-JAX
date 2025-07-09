@@ -59,7 +59,7 @@ class DropletOnWall3D(MultiphaseMRT):
             "ux": u[..., 0],
             "uy": u[..., 1],
             "uz": u[..., 2],
-            "flag": np.array(self.solid_mask_streamed[..., 0]),
+            "flag": np.array(self.solid_mask_streamed[0][..., 0]),
         }
         u_sp = np.sqrt(np.sum(np.square(u), axis=-1))
         print(f"Max spurious velocity: {np.max(u_sp)}")
