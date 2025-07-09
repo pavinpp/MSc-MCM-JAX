@@ -22,6 +22,8 @@ from src.lattice import LatticeD2Q9
 
 jax.config.update("jax_enable_x64", True)
 
+# config.update("jax_default_matmul_precision", "highest")
+
 
 def taylor_green_initial_fields(xx, yy, u0, rho0, nu, time):
     ux = u0 * np.sin(xx) * np.cos(yy) * np.exp(-2 * nu * time)

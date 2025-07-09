@@ -8,13 +8,15 @@ Series A: Mathematical, Physical and Engineering Sciences 360, 437–451 (2002).
 """
 
 import os
-
 import numpy as np
+from jax import config
 
 from src.lattice import LatticeD3Q19
 from src.multiphase import MultiphaseMRT
 from src.eos import VanderWaal
 from src.utils import save_fields_vtk
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class Droplet3D(MultiphaseMRT):

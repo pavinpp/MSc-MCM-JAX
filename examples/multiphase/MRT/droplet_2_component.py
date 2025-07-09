@@ -14,30 +14,11 @@ from src.utils import save_fields_vtk
 from src.multiphase import MultiphaseMRT
 
 from functools import partial
-from jax import jit, vmap
+from jax import jit, vmap, config
 from jax.tree import map, reduce
 import jax.numpy as jnp
 
-
-nx = 200
-ny = 200
-
-tau_2 = 1.9
-v_2 = (tau_2 - 0.5) / 3
-
-M = 10.0  # set
-v_1 = v_2 / M
-tau_1 = 3 * v_1 + 0.5
-
-rho_2 = 1.0
-rho_1 = 1.0
-width = 5
-
-rho_t = rho_1 + rho_2
-
-# Fraction of total density in the bulk of one component
-# It needs to be non-zero value to prevent NaN values.
-fraction = 0.97
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class Droplet2D(MultiphaseMRT):
@@ -47,7 +28,7 @@ class Droplet2D(MultiphaseMRT):
         x, y = np.meshgrid(x, y)
 
         rho_tree = []
-        dist = (x - nx / 2) ** 2 + (y - ny / 2) ** 2 - r**2
+        dist = (x - self.nx / 2) ** 2 + (y - self.ny / 2) ** 2 - r**2
 
         # Injected fluid
         rho_inside = (1 - fraction) * rho_t
@@ -135,6 +116,26 @@ class Droplet2D(MultiphaseMRT):
 
 
 if __name__ == "__main__":
+    nx = 200
+    ny = 200
+
+    tau_2 = 1.9
+    v_2 = (tau_2 - 0.5) / 3
+
+    M = 10.0  # set
+    v_1 = v_2 / M
+    tau_1 = 3 * v_1 + 0.5
+
+    rho_2 = 1.0
+    rho_1 = 1.0
+    width = 5
+
+    rho_t = rho_1 + rho_2
+
+    # Fraction of total density in the bulk of one component
+    # It needs to be non-zero value to prevent NaN values.
+    fraction = 0.97
+
     precision = "f32/f32"
     g_kkprime = -0.027 * np.ones((2, 2))
     # for g in np.linspace(0, 1.0, 100):

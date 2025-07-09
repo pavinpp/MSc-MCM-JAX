@@ -16,9 +16,11 @@ from src.multiphase import MultiphaseMRT
 from src.boundary_conditions import BounceBack, EquilibriumBC
 
 from functools import partial
-from jax import jit, vmap
+from jax import jit, vmap, config
 from jax.tree import map, reduce
 import jax.numpy as jnp
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class PoreDoublet(MultiphaseMRT):

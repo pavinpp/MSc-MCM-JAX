@@ -8,7 +8,7 @@ The collision matrix is based on:
 """
 
 import os
-
+from jax import config
 import numpy as np
 
 from src.boundary_conditions import BounceBack
@@ -16,6 +16,8 @@ from src.lattice import LatticeD2Q9
 from src.eos import VanderWaal
 from src.utils import save_fields_vtk
 from src.multiphase import MultiphaseMRT
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class DropletOnCurvedSurface2D(MultiphaseMRT):

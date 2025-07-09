@@ -12,7 +12,7 @@ from functools import partial
 
 import jax.numpy as jnp
 import numpy as np
-from jax import jit
+from jax import jit, config
 from jax.tree import map
 
 from src.boundary_conditions import BounceBack, ExactNonEquilibriumExtrapolation
@@ -20,6 +20,8 @@ from src.eos import Peng_Robinson
 from src.lattice import LatticeD2Q9, LatticeD3Q19
 from src.multiphase import MultiphaseCascade
 from src.utils import save_fields_vtk
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 # Estimate surface tension of the water component
@@ -521,7 +523,7 @@ class StefansProblem3D(MultiphaseCascade):
             Fx = F_intra[..., 0]
             Fy = F_intra[..., 1]
             Fz = F_intra[..., 2]
-            eta = 2 * sigma * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
+            eta = 6 * sigma * (Fx**2 + Fy**2 + Fz**2) / ((psi[..., 0] ** 2) * (1 / s_b - 0.5))
             Fx = F[..., 0]
             Fy = F[..., 1]
             Fz = F[..., 2]
@@ -573,6 +575,57 @@ class StefansProblem3D(MultiphaseCascade):
             "ux": u[..., 0],
             "uy": u[..., 1],
         }
+        save_fields_vtk(
+            timestep,
+            fields,
+            "output",
+            "data",
+        )
+
+
+class DropletOnWall2D(MultiphaseCascade):
+    def initialize_macroscopic_fields(self):
+        dist = np.sqrt((x - self.nx / 2) ** 2 + (y - self.ny / 2 - 100) ** 2)
+        rho = 0.5 * (rho_w_l + rho_w_g) - 0.5 * (rho_w_l - rho_w_g) * np.tanh(2 * (dist - r) / width)
+        rho = rho.reshape((nx, ny, 1))
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
+        rho = self.precisionPolicy.cast_to_output(rho)
+        rho_tree = [rho]
+        rho = 0.5 * (rho_a_l + rho_a_g) - 0.5 * (rho_a_l - rho_a_g) * np.tanh(2 * (dist - r) / width)
+        rho = rho.reshape((nx, ny, 1))
+        rho = self.distributed_array_init((self.nx, self.ny, 1), self.precisionPolicy.compute_dtype, init_val=rho)
+        rho = self.precisionPolicy.cast_to_output(rho)
+        rho_tree.append(rho)
+
+        u = np.zeros((self.nx, self.ny, 2))
+        u = self.precisionPolicy.cast_to_output(u)
+        u_tree = [u, u]
+        return rho_tree, u_tree
+
+    def set_boundary_conditions(self):
+        self.BCs[0].append(
+            BounceBack(
+                tuple(ind.T),
+                self.gridInfo,
+                self.precisionPolicy,
+                theta[tuple(ind.T)],
+                phi[tuple(ind.T)],
+                delta_rho[tuple(ind.T)],
+            )
+        )
+
+    def output_data(self, **kwargs):
+        rho = np.array(kwargs["rho_tree"][0][0, :, :, :])
+        u = np.array(kwargs["u_tree"][0][0, :, :, :])
+        timestep = kwargs["timestep"]
+        fields = {
+            "rho": rho[..., 0],
+            "ux": u[..., 0],
+            "uy": u[..., 1],
+            "flag": np.array(self.solid_mask_streamed[0][..., 0]),
+        }
+        u_sp = np.sqrt(np.sum(np.square(u), axis=-1))
+        print(f"Max spurious velocity: {np.max(u_sp)}")
         save_fields_vtk(
             timestep,
             fields,
@@ -709,62 +762,118 @@ if __name__ == "__main__":
     # os.system("rm -rf output*/ *.vtk")
     # sim = StefansProblem2D(**kwargs)
     # sim.run(2000)
-
+    #
     # D3Q19
-    e = LatticeD3Q19().c.T
-    ex = e[:, 0]
-    ey = e[:, 1]
-    ez = e[:, 2]
-    M = np.zeros((19, 19))
-    M[0, :] = ex**0
-    M[1, :] = ex
-    M[2, :] = ey
-    M[3, :] = ez
-    M[4, :] = ex * ey
-    M[5, :] = ex * ez
-    M[6, :] = ey * ez
-    M[7, :] = ex * ex
-    M[8, :] = ey * ey
-    M[9, :] = ez * ez
-    M[10, :] = ex * ey * ey
-    M[11, :] = ex * ez * ez
-    M[12, :] = ey * ex * ex
-    M[13, :] = ez * ex * ex
-    M[14, :] = ey * ez * ez
-    M[15, :] = ez * ey * ey
-    M[16, :] = ex * ex * ey * ey
-    M[17, :] = ex * ex * ez * ez
-    M[18, :] = ey * ey * ez * ez
+    # e = LatticeD3Q19().c.T
+    # ex = e[:, 0]
+    # ey = e[:, 1]
+    # ez = e[:, 2]
+    # M = np.zeros((19, 19))
+    # M[0, :] = ex**0
+    # M[1, :] = ex
+    # M[2, :] = ey
+    # M[3, :] = ez
+    # M[4, :] = ex * ey
+    # M[5, :] = ex * ez
+    # M[6, :] = ey * ez
+    # M[7, :] = ex * ex
+    # M[8, :] = ey * ey
+    # M[9, :] = ez * ez
+    # M[10, :] = ex * ey * ey
+    # M[11, :] = ex * ez * ez
+    # M[12, :] = ey * ex * ex
+    # M[13, :] = ez * ex * ex
+    # M[14, :] = ey * ez * ez
+    # M[15, :] = ez * ey * ey
+    # M[16, :] = ex * ex * ey * ey
+    # M[17, :] = ex * ex * ez * ez
+    # M[18, :] = ey * ey * ez * ez
 
-    s2 = 0.8
-    # s3 = (16 - 8 * s2) / (8 - s2)
-    s_0 = [1.0, 1.0]
-    s_1 = [1.0, 1.0]
-    s_2 = [s2, s2]
-    s_b = [0.8, 0.8]
-    s_3 = [1.8, 1.8]
-    s_4 = [1.0, 1.0]
+    # s2 = 0.8
+    # # s3 = (16 - 8 * s2) / (8 - s2)
+    # s_0 = [1.0, 1.0]
+    # s_1 = [1.0, 1.0]
+    # s_2 = [s2, s2]
+    # s_b = [0.8, 0.8]
+    # s_3 = [1.8, 1.8]
+    # s_4 = [1.0, 1.0]
 
-    nx = 20
-    ny = 500
-    nz = 20
+    # nx = 20
+    # ny = 500
+    # nz = 20
+    # width = 5
+    # rho_a_l = 0.1
+    # rho_a_g = 0.0019
+    # rho_w_g_boundary = rho_w_g - 0.0745
+    # rho_a_g_boundary = rho_a_g + 0.0745
+    # # rho_w_l_boundary = rho_w_l - 0.189
+    # # rho_a_l_boundary = rho_a_l + 0.189
+    # # initial liquid region width
+    # L = 2 * ny // 5
+    # kwargs = {
+    #     "n_components": 2,
+    #     "lattice": LatticeD3Q19(precision),
+    #     "nx": nx,
+    #     "ny": ny,
+    #     "nz": nz,
+    #     "g_kkprime": g_kkprime,
+    #     "body_force": [0.0, 0.0, 0.0],
+    #     "omega": [s2, s2],
+    #     "EOS": eos,
+    #     "k": [1.0, 1.0],
+    #     "A": np.zeros((2, 2)),
+    #     "M": [M, M],
+    #     "s_0": s_0,
+    #     "s_1": s_1,
+    #     "s_b": s_b,
+    #     "s_2": s_2,
+    #     "s_3": s_3,
+    #     "s_4": s_4,
+    #     "sigma": [0.102, 0.0],
+    #     "precision": precision,
+    #     "io_rate": 10,
+    #     "print_info_rate": 10,
+    #     "compute_MLUPS": False,
+    #     "checkpoint_rate": -1,
+    #     "checkpoint_dir": os.path.abspath("./checkpoints_"),
+    #     "restore_checkpoint": False,
+    # }
+    # os.system("rm -rf output*/ *.vtk")
+    # sim = StefansProblem3D(**kwargs)
+    # sim.run(1000)
+
+    r = 50
     width = 5
+    nx = 300
+    ny = 350
+    theta = 60 * np.pi / 180 * np.ones((nx, ny, 1))
+    phi = 1.1 * np.ones((nx, ny, 1))
+    delta_rho = 0.0 * np.ones((nx, ny, 1))
+
+    rho_w_l = 6.499210784
+    rho_w_g = 0.379598891
     rho_a_l = 0.1
     rho_a_g = 0.0019
-    rho_w_g_boundary = rho_w_g - 0.189
-    rho_a_g_boundary = rho_a_g + 0.189
-    # rho_w_l_boundary = rho_w_l - 0.189
-    # rho_a_l_boundary = rho_a_l + 0.189
-    # initial liquid region width
-    L = 2 * ny // 5
+    rho_w_g_boundary = rho_w_g - 0.0745
+    rho_a_g_boundary = rho_a_g + 0.0745
+
+    # Circular wall
+    R = 70
+    x = np.linspace(0, nx - 1, nx)
+    y = np.linspace(0, ny - 1, ny)
+    x, y = np.meshgrid(x, y)
+    x = x.T
+    y = y.T
+    circ = (x - nx / 2) ** 2 + (y - ny / 2 + 20) ** 2 - R**2
+    ind = np.array(np.where(circ <= 0), dtype=int).T
     kwargs = {
         "n_components": 2,
-        "lattice": LatticeD3Q19(precision),
+        "lattice": LatticeD2Q9(precision),
         "nx": nx,
         "ny": ny,
-        "nz": nz,
+        "nz": 0,
         "g_kkprime": g_kkprime,
-        "body_force": [0.0, 0.0, 0.0],
+        "body_force": [0.0, 0.0],
         "omega": [s2, s2],
         "EOS": eos,
         "k": [1.0, 1.0],
@@ -776,15 +885,14 @@ if __name__ == "__main__":
         "s_2": s_2,
         "s_3": s_3,
         "s_4": s_4,
-        "sigma": [0.09, 0.0],
+        "sigma": [0.099, 0.0],
         "precision": precision,
-        "io_rate": 10,
-        "print_info_rate": 10,
+        "io_rate": 10000,
+        "print_info_rate": 10000,
         "compute_MLUPS": False,
         "checkpoint_rate": -1,
         "checkpoint_dir": os.path.abspath("./checkpoints_"),
         "restore_checkpoint": False,
     }
-    os.system("rm -rf output*/ *.vtk")
-    sim = StefansProblem3D(**kwargs)
-    sim.run(100)
+    sim = DropletOnWall2D(*kwargs)
+    sim.run(20000)

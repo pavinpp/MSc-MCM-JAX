@@ -17,8 +17,10 @@ from src.multiphase import MultiphaseCascade
 import operator
 from functools import partial
 import jax.numpy as jnp
-from jax import vmap, jit
+from jax import vmap, jit, config
 from jax.tree import reduce, map
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class Droplet2D(MultiphaseCascade):

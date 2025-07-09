@@ -13,9 +13,11 @@ from src.multiphase import MultiphaseMRT
 from src.boundary_conditions import BounceBack
 
 from functools import partial
-from jax import jit, vmap
+from jax import jit, vmap, config
 from jax.tree import map, reduce
 import jax.numpy as jnp
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class Channel2D(MultiphaseMRT):
@@ -350,7 +352,7 @@ if __name__ == "__main__":
         tau_nw = 3 * v_nw + 0.5
 
         s_rho = [0.0, 0.0]  # Mass
-        s_e = [0.5, 0.4]
+        s_e = [0.4, 0.4]
         s_eta = [1.0, 1.0]  # 1.5
         s_j = [0.0, 0.0]  # Momentum
         s_q = [1.0, 1.0]

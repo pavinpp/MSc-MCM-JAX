@@ -22,6 +22,8 @@ from src.utils import save_fields_vtk
 
 import h5py
 
+# config.update("jax_default_matmul_precision", "float32")
+
 
 # Multi-component droplet simulation to tune fluid-fluid interaction parameters and surface tension
 class Droplet3D(MultiphaseMRT):

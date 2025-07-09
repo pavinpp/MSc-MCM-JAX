@@ -17,13 +17,13 @@ from src.multiphase import MultiphaseMRT
 from src.boundary_conditions import BounceBack
 
 from functools import partial
-from jax import jit, vmap
+from jax import jit, vmap, config
 from jax.tree import map, reduce
 import jax.numpy as jnp
 
 import jax
 
-jax.config.update("jax_default_matmul_precision", "float32")
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class Droplet2D(MultiphaseMRT):

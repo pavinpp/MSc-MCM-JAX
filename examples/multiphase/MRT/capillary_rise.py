@@ -13,9 +13,9 @@ from src.boundary_conditions import BounceBack
 from src.utils import save_fields_vtk
 from src.eos import VanderWaal
 
-import jax
+from jax import config
 
-jax.config.update("jax_default_matmul_precision", "float32")
+# config.update("jax_default_matmul_precision", "float32")
 
 
 # Estimate surface tension

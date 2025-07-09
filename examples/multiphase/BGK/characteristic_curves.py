@@ -22,7 +22,7 @@ import jax.numpy as jnp
 from jax import jit, config
 from jax.tree import map
 
-config.update("jax_default_matmul_precision", "float32")
+# config.update("jax_default_matmul_precision", "float32")
 
 
 # Multi-component droplet simulation to tune fluid-fluid interaction parameters and surface tension

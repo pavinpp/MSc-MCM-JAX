@@ -31,6 +31,9 @@ from src.utils import *
 # os.environ["XLA_FLAGS"] = '--xla_force_host_platform_device_count=8'
 
 
+# config.update("jax_default_matmul_precision", "float32")
+
+
 class Cavity(KBCSim):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

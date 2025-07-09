@@ -33,7 +33,6 @@ import matplotlib.pylab as plt
 from src.models import BGKSim, KBCSim
 from src.lattice import LatticeD3Q19, LatticeD3Q27
 from src.boundary_conditions import *
-import numpy as np
 from src.utils import *
 from jax import config
 import os
@@ -44,6 +43,9 @@ import scipy
 
 # PhantomGaze for in-situ rendering
 import phantomgaze as pg
+
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 def makeNacaAirfoil(length, thickness=30, angle=0):

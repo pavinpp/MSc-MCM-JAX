@@ -37,6 +37,8 @@ from src.lattice import LatticeD2Q9
 # os.environ["XLA_FLAGS"] = '--xla_force_host_platform_device_count=8'
 jax.config.update("jax_enable_x64", True)
 
+# config.update("jax_default_matmul_precision", "highest")
+
 
 class Cylinder(BGKSim):
     def __init__(self, **kwargs):

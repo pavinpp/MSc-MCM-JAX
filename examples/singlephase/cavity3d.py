@@ -29,6 +29,8 @@ from src.boundary_conditions import *
 
 config.update("jax_enable_x64", True)
 
+# config.update("jax_default_matmul_precision", "highest")
+
 
 class Cavity(KBCSim):
     # Note: We have used BGK with D3Q19 (or D3Q27) for Re=(1000, 3200) and KBC with D3Q27 for Re=10,000

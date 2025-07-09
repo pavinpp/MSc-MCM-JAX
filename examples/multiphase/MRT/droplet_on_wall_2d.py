@@ -10,12 +10,15 @@ The collision matrix is based on:
 
 import os
 import numpy as np
+from jax import config
 
 from src.lattice import LatticeD2Q9
 from src.multiphase import MultiphaseMRT
 from src.eos import Peng_Robinson
 from src.boundary_conditions import BounceBack
 from src.utils import save_fields_vtk
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class DropletOnWall2D(MultiphaseMRT):

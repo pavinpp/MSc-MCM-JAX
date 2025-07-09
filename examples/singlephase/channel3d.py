@@ -32,6 +32,8 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
+# config.update("jax_default_matmul_precision", "highest")
+
 
 def vonKarman_loglaw_wall(yplus):
     vonKarmanConst = 0.41

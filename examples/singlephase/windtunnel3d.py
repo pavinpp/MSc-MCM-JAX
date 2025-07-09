@@ -31,6 +31,8 @@ from src.boundary_conditions import *
 
 jax.config.update("jax_array", True)
 
+# config.update("jax_default_matmul_precision", "float32")
+
 
 class Car(KBCSim):
     def __init__(self, **kwargs):

@@ -20,10 +20,10 @@ from src.eos import Peng_Robinson
 import matplotlib.pyplot as plt
 import phantomgaze as pg
 
-import jax
+from jax import config
 import jax.numpy as jnp
 
-jax.config.update("jax_default_matmul_precision", "float32")
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class DropletOnWall3D(MultiphaseMRT):

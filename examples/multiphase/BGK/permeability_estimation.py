@@ -14,7 +14,7 @@ from src.multiphase import MultiphaseBGK
 from src.boundary_conditions import BounceBack, Regularized
 
 from functools import partial
-from jax import jit, vmap
+from jax import jit, vmap, config
 from jax.tree import map, reduce
 import jax.numpy as jnp
 import h5py
@@ -29,6 +29,9 @@ urlretrieve(
     "374_03_09_256.mat",
 )
 os.system("mv 374_03_09_256.mat ./assets")
+
+
+# config.update("jax_default_matmul_precision", "float32")
 
 
 class PorousMedia(MultiphaseBGK):
