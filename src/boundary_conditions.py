@@ -1564,6 +1564,6 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
         # Correction step
         rho_incorrect = jnp.sum(fbd, axis=-1, keepdims=True)
         rho_correct = self.prescribed
-        beta = self.G_ff * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.G_ff)
+        beta = self.w_NEQ * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.G_ff)
         fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + beta[bindex, self.imissing])
         return fbd

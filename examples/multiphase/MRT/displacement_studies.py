@@ -625,9 +625,9 @@ if __name__ == "__main__":
     _bin = np.array(geometry["bin"], dtype=int)
     ind = np.where(_bin == 1.0)
     idx = np.zeros((len(ind[0]), 3), dtype=int)
-    idx[:, 0] = id[0] + buffer
-    idx[:, 1] = id[1]
-    idx[:, 2] = id[2]
+    idx[:, 0] = ind[0] + buffer
+    idx[:, 1] = ind[1]
+    idx[:, 2] = ind[2]
 
     theta_w = (np.pi / 2) * np.ones((nx, ny, nz, 1))
     theta_w[tuple(idx.T)] = np.pi / 6
