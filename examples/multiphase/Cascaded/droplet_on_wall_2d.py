@@ -223,7 +223,7 @@ if __name__ == "__main__":
     theta_w = 60 * np.pi / 180 * np.ones((nx, ny, 1))
     phi_w = 1.2 * np.ones((nx, ny, 1))
     delta_rho_w = 0.0 * np.ones((nx, ny, 1))
-    theta_a = 60 * np.pi / 180 * np.ones((nx, ny, 1))
+    theta_a = 120 * np.pi / 180 * np.ones((nx, ny, 1))
     phi_a = 0.0 * np.ones((nx, ny, 1))
     delta_rho_a = 0.2 * np.ones((nx, ny, 1))
 
@@ -231,11 +231,11 @@ if __name__ == "__main__":
     rho_w_l = 6.499210784
     rho_w_g = 0.379598891
     # Air
-    rho_a_l = 0.1
+    rho_a_l = 0.0019
     rho_a_g = 0.0019
     # Modify gas phase densities for different vapor fraction
-    rho_w_g = rho_w_g - 0.0745
-    rho_a_g = rho_a_g + 0.0745
+    rho_w_g = rho_w_g - 0.0003
+    rho_a_g = rho_a_g + 0.0003
 
     # Circular wall
     R = 70
@@ -274,5 +274,6 @@ if __name__ == "__main__":
         "checkpoint_dir": os.path.abspath("./checkpoints_"),
         "restore_checkpoint": False,
     }
-    sim = DropletOnWall2D(*kwargs)
+    os.system("rm -rf output*/ *.vtk")
+    sim = DropletOnWall2D(**kwargs)
     sim.run(20000)
