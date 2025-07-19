@@ -1512,13 +1512,13 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
         w_NEQ = np.zeros((self.lattice.q,), dtype=np.float64)
         cl = np.linalg.norm(c, axis=-1)
         if isinstance(self.lattice, LatticeD2Q9):
-            g1 = 1 / 3
-            g2 = 1 / 12
+            g1 = 1.0 / 3.0
+            g2 = 1.0 / 12.0
             w_NEQ[np.isclose(cl, 1.0, atol=1e-6)] = g1
             w_NEQ[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         elif isinstance(self.lattice, LatticeD3Q19):
-            g1 = 1 / 6
-            g2 = 1 / 12
+            g1 = 1.0 / 6.0
+            g2 = 1.0 / 12.0
             w_NEQ[np.isclose(cl, 1.0, atol=1e-6)] = g1
             w_NEQ[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         return jnp.array(w_NEQ, dtype=self.precisionPolicy.compute_dtype)
@@ -1564,6 +1564,6 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
         # Correction step
         rho_incorrect = jnp.sum(fbd, axis=-1, keepdims=True)
         rho_correct = self.prescribed
-        beta = self.w_NEQ * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.G_ff)
+        beta = self.w_NEQ * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.w_NEQ)
         fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + beta[bindex, self.imissing])
         return fbd

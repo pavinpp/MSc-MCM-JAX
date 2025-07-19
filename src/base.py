@@ -23,7 +23,7 @@ from termcolor import colored
 # Local/Custom Libraries
 from src.utils import downsample_field
 
-jax.config.update("jax_spmd_mode", "allow_all")
+# jax.config.update("jax_spmd_mode", "allow_all")
 # Disables annoying TF warnings
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
