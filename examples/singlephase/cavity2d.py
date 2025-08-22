@@ -54,8 +54,8 @@ class Cavity(KBCSim):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs["rho"][1:-1, 1:-1])
-        u = np.array(kwargs["u"][1:-1, 1:-1, :])
+        rho = np.array(kwargs["rho"][0, 1:-1, 1:-1])
+        u = np.array(kwargs["u"][0, 1:-1, 1:-1, :])
         timestep = kwargs["timestep"]
 
         save_image(timestep, u)
