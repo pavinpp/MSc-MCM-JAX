@@ -526,11 +526,7 @@ class Multiphase(LBMBase):
         """
         rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
-        u_tree = map(
-            lambda f, rho: jnp.dot(f, c) / rho,
-            f_tree,
-            rho_tree,
-        )  # Component velocity
+        u_tree = map(lambda f, rho: jnp.dot(f, c) / rho, f_tree, rho_tree)  # Component velocity
         return rho_tree, u_tree
 
     @partial(jit, static_argnums=(0,), inline=True)
@@ -552,11 +548,7 @@ class Multiphase(LBMBase):
         """
         # rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
-        u_tree = map(
-            lambda f, rho: jnp.dot(f, c) / rho,
-            f_tree,
-            rho_tree,
-        )
+        u_tree = map(lambda f, rho: jnp.dot(f, c) / rho, f_tree, rho_tree)
         F_tree = self.compute_force(rho_tree)
         return map(lambda rho, u, F: u + 0.5 * F / rho, rho_tree, u_tree, F_tree)
 
