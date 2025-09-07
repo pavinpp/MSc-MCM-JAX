@@ -586,10 +586,7 @@ class Multiphase(LBMBase):
         jax.numpy.ndarray
             Total velocity values.
         """
-        n = reduce(
-            operator.add,
-            map(lambda rho, u: rho * u, rho_tree, u_tree),
-        )
+        n = reduce(operator.add, map(lambda rho, u: rho * u, rho_tree, u_tree))
         d = reduce(operator.add, rho_tree)
         return n / d
 
