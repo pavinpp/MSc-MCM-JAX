@@ -18,6 +18,12 @@ inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://g
   Capillary rise in parallel plates (single component, multiphase simulation)
 </p> -->
 <p align="center">
+  <img src="assets/evaporation.gif" alt="" width="600">
+</p>
+<p align="center">
+    Time evolution of liquid distribution in a porous medium during evaporation. Two-component (air–water) system simulated with the Cascaded (central-moment) collision model.
+</p>
+<p align="center">
   <img src="assets/droplet_impact.gif" alt="" width="600">
 </p>
 <p align="center">
