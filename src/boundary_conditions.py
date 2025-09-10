@@ -1289,6 +1289,8 @@ class ConvectiveOutflow(BoundaryCondition):
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
         self.indices_nbr = tuple(ind.T)
+        nbd = len(self.indices[0])
+        self.bindex = np.arange(nbd)[:, None]
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, _):
@@ -1320,12 +1322,11 @@ class ConvectiveOutflow(BoundaryCondition):
         )
         lambda_cbc = jnp.mean(u_nbr)
 
-        nbd = len(self.indices[0])
-        bindex = np.arange(nbd)[:, None]
-
         fbd = fout[self.indices]
-        # fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + lambda_cbc * f_nbr[bindex, self.imissing]) / (1 + lambda_cbc)
-        fbd = fbd.at[...].set((fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc))
+        fbd = fbd.at[self.bindex, self.imissing].set(fbd[self.bindex, self.imissing] + lambda_cbc * f_nbr[self.bindex, self.imissing]) / (
+            1 + lambda_cbc
+        )
+        # fbd = fbd.at[...].set((fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc))
         return fbd
 
 
@@ -1411,6 +1412,8 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
         self.indices_nbr = tuple(ind.T)
+        nbd = len(self.indices[0])
+        self.bindex = np.arange(nbd)[:, None]
 
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, _):
@@ -1429,18 +1432,17 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         jax.numpy.ndarray
             The modified output distribution functions after applying the boundary condition.
         """
-        nbd = len(self.indices[0])
-        bindex = np.arange(nbd)[:, None]
         fbd = fout[self.indices]
-
         f_nbr = fout[self.indices_nbr]
         rho = jnp.sum(fbd, axis=-1, keepdims=True)
         rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
         vel_nbr = jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr
+
         feq = self.equilibrium(rho, vel_nbr)
         feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
         fneq_nbr = f_nbr - feq_nbr
-        fbd = fbd.at[bindex, self.imissing].set(feq[bindex, self.imissing] + fneq_nbr[bindex, self.imissing])
+
+        fbd = fbd.at[self.bindex, self.imissing].set(feq[self.bindex, self.imissing] + fneq_nbr[self.bindex, self.imissing])
         return fbd
 
 
@@ -1461,25 +1463,32 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
     Journal of Fluid Mechanics 955, A18 (2023).
     """
 
-    def __init__(self, indices, gridInfo, precisionPolicy, prescribed):
+    def __init__(self, indices, gridInfo, precisionPolicy, prescribed, bc_type):
         super().__init__(indices, gridInfo, precisionPolicy)
-        self.name = "NonEquilibriumExtrapolation"
-        self.needsExtraConfiguration = False
+        self.name = "ExactNonEquilibriumExtrapolation"
+        self.needsExtraConfiguration = True  # TODO
         self.prescribed = prescribed
+        self.type = bc_type
         self.w_NEQ = self.compute_NEQ_weights()
-        self.nbrs_found = False
 
-    # def configure(self, boundaryMask):
-    #     """
-    #     Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
-    #     are assigned this type of BC.
-    #     """
-    #     nv = np.dot(self.lattice.c, ~boundaryMask.T)
-    #     corner_voxels = np.count_nonzero(nv, axis=0) > 1
-    #     # removed_voxels = np.array(self.indices)[:, corner_voxels]
-    #     self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
-    #     self.normals = self.normals[~corner_voxels]
-    #     return
+    def configure(self, boundaryMask):
+        """
+        Configure the boundary condition by finding neighbouring voxel indices.
+
+        Parameters
+        ----------
+        boundaryMask : np.ndarray
+            The grid mask for the boundary voxels.
+        """
+        hasFluidNeighbour = ~boundaryMask[:, self.lattice.opp_indices]
+        idx = np.array(self.indices).T
+        idx_trg = []
+        for i in range(self.lattice.q):
+            idx_trg.append(idx[hasFluidNeighbour[:, i], :] + self.lattice.c[:, i])
+        indices_nbr = np.unique(np.vstack(idx_trg), axis=0)
+        self.indices_nbr = tuple(indices_nbr.T)
+
+        return
 
     def compute_NEQ_weights(self):
         """
@@ -1523,10 +1532,6 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
             w_NEQ[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
         return jnp.array(w_NEQ, dtype=self.precisionPolicy.compute_dtype)
 
-    def find_neighbors(self):
-        ind = np.array(self.indices).T - self.normals
-        self.indices_nbr = tuple(ind.T)
-
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, _):
         """
@@ -1544,26 +1549,22 @@ class ExactNonEquilibriumExtrapolation(BoundaryCondition):
         jax.numpy.ndarray
             The modified output distribution functions after applying the boundary condition.
         """
-        if not self.nbrs_found:
-            self.find_neighbors()
-            self.nbrs_found = True
-
         nbd = len(self.indices[0])
         bindex = np.arange(nbd)[:, None]
         fbd = fout[self.indices]
 
-        f_nbr = fout[self.indices_nbr]
-        rho = jnp.sum(fbd, axis=-1, keepdims=True)
-        rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
-        vel_nbr = jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr
-        feq = self.equilibrium(rho, vel_nbr)
+        rho = jnp.sum(fout, axis=-1, keepdims=True)
+        vel = jnp.dot(fout, self.precisionPolicy.cast_to_compute(self.lattice.c.T)) / rho
+
+        rho_nbr = rho[self.indices_nbr]
+        vel_nbr = vel[self.indices_nbr]
         feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
-        fneq_nbr = f_nbr - feq_nbr
+        feq = self.equilibrium(self.prescribed, vel_nbr)
+        fneq_nbr = fout[self.indices_nbr] - feq_nbr
         fbd = fbd.at[bindex, self.imissing].set(feq[bindex, self.imissing] + fneq_nbr[bindex, self.imissing])
 
         # Correction step
         rho_incorrect = jnp.sum(fbd, axis=-1, keepdims=True)
-        rho_correct = self.prescribed
-        beta = self.w_NEQ * jnp.repeat(rho_correct - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.w_NEQ)
+        beta = self.w_NEQ * jnp.repeat(self.prescribed - rho_incorrect, axis=-1, repeats=self.lattice.q) / jnp.sum(self.w_NEQ)
         fbd = fbd.at[bindex, self.imissing].set(fbd[bindex, self.imissing] + beta[bindex, self.imissing])
         return fbd

@@ -296,12 +296,7 @@ class Multiphase(LBMBase):
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype)
         cu_tree = map(lambda u: 3.0 * jnp.dot(u, c), u_tree)
         usqr_tree = map(lambda u: 1.5 * jnp.sum(jnp.square(u), axis=-1, keepdims=True), u_tree)
-        feq_tree = map(
-            lambda rho, udote, udotu: rho * self.w * (1.0 + udote * (1.0 + 0.5 * udote) - udotu),
-            rho_tree,
-            cu_tree,
-            usqr_tree,
-        )
+        feq_tree = map(lambda rho, udote, udotu: rho * self.w * (1.0 + udote * (1.0 + 0.5 * udote) - udotu), rho_tree, cu_tree, usqr_tree)
 
         if cast_output:
             return map(lambda f_eq: self.precisionPolicy.cast_to_output(f_eq), feq_tree)
@@ -310,16 +305,9 @@ class Multiphase(LBMBase):
 
     @partial(jit, static_argnums=(0,))
     def compute_average_density(self, rho_tree):
-        rho_s_tree = map(
-            lambda rho: self.streaming(jnp.repeat(rho, axis=-1, repeats=self.lattice.q)),
-            rho_tree,
-        )
+        rho_s_tree = map(lambda rho: self.streaming(jnp.repeat(rho, axis=-1, repeats=self.lattice.q)), rho_tree)
         rho_ave_tree = map(
-            lambda rho_s, solid_mask: jnp.sum(
-                self.G_ff * rho_s * (1 - solid_mask),
-                axis=-1,
-                keepdims=True,
-            )
+            lambda rho_s, solid_mask: jnp.sum(self.G_ff * rho_s * (1 - solid_mask), axis=-1, keepdims=True)
             / jnp.sum(self.G_ff * (1 - solid_mask), axis=-1, keepdims=True),
             rho_s_tree,
             self.solid_mask_streamed,
@@ -369,12 +357,7 @@ class Multiphase(LBMBase):
                     rho = jnp.clip(rho, min=rho_min, max=rho_max)
             return rho
 
-        return map(
-            lambda rho, rho_ave, BC: set_contact_angle(rho, rho_ave, BC),
-            rho_tree,
-            rho_ave_tree,
-            self.BCs,
-        )
+        return map(lambda rho, rho_ave, BC: set_contact_angle(rho, rho_ave, BC), rho_tree, rho_ave_tree, self.BCs)
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
     def collision(self, fin_tree):
@@ -706,18 +689,7 @@ class Multiphase(LBMBase):
             Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
             fluid nodes are considered.
             """
-            return reduce(
-                operator.add,
-                map(
-                    lambda A, G, psi_s: jnp.dot(
-                        (1 - A) * G * self.G_ff * psi_s,
-                        c,
-                    ),
-                    list(Ai),
-                    list(g_kkprime),
-                    psi_s_tree,
-                ),
-            )
+            return reduce(operator.add, map(lambda A, G, psi_s: jnp.dot((1 - A) * G * self.G_ff * psi_s, c), list(Ai), list(g_kkprime), psi_s_tree))
 
         def ffk_2(Ai):
             """
@@ -726,14 +698,7 @@ class Multiphase(LBMBase):
             Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
             fluid nodes are considered.
             """
-            return reduce(
-                operator.add,
-                map(
-                    lambda A, U_s: A * jnp.dot(self.G_ff * U_s, c),
-                    list(Ai),
-                    U_s_tree,
-                ),
-            )
+            return reduce(operator.add, map(lambda A, U_s: A * jnp.dot(self.G_ff * U_s, c), list(Ai), U_s_tree))
 
         return map(
             lambda psi, nt_1, nt_2: psi * nt_1 + nt_2,
@@ -763,15 +728,10 @@ class Multiphase(LBMBase):
     #         * jnp.dot(self.G_fs * solid_mask, self.c.T),
     #         self.g_ks,
     #         rho_tree,
-    #         self.solid_mask_streamed,
+    #         self.solid_mask_streamed
     #     )
     # psi_tree, _ = self.compute_potential(rho_tree)
-    # psi_s_tree = map(
-    #     lambda psi: self.streaming(
-    #         jnp.repeat(psi, axis=-1, repeats=self.lattice.q)
-    #     ),
-    #     psi_tree,
-    # )
+    # psi_s_tree = map(lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.lattice.q)), psi_tree)
     # return map(
     #     lambda g_ks, psi, psi_s, solid_mask: -g_ks
     #     * psi
@@ -807,12 +767,7 @@ class Multiphase(LBMBase):
 
         u_temp_tree = map(lambda u, F, rho: u + F / rho, u_tree, F_tree, rho_tree)
         feq_force_tree = self.equilibrium(rho_tree, u_temp_tree)
-        return map(
-            lambda f_postcollision, feq_force, feq: f_postcollision + feq_force - feq,
-            f_postcollision_tree,
-            feq_force_tree,
-            feq_tree,
-        )
+        return map(lambda f_postcollision, feq_force, feq: f_postcollision + feq_force - feq, f_postcollision_tree, feq_force_tree, feq_tree)
 
     @partial(jit, static_argnums=(0, 4), inline=True)
     def apply_bc(self, fout_tree, fin_tree, timestep, implementation_step):
