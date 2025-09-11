@@ -1446,6 +1446,7 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         return fbd
 
 
+# TODO
 class ExactNonEquilibriumExtrapolation(BoundaryCondition):
     """
     Non-equilibrium extrapolation boundary condition but with added correction step to correct the density at the boundary node.
