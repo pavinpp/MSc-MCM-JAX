@@ -60,9 +60,9 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs["rho_tree"][0][0, :, :, :])
-        p = np.array(kwargs["p"][0, :, :])
-        u = np.array(kwargs["u_tree"][0][0, :, :, :])
+        rho = np.array(kwargs["rho_tree"][0][0, ...])
+        p = np.array(kwargs["p"][0, ...])
+        u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
         fields = {
             "p": p[..., 0],

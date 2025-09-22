@@ -685,18 +685,12 @@ class Multiphase(LBMBase):
             """
             Shan-Chen interaction force
             g_kkprime is a row of self.gkkprime, as it represents the interaction between kth component with all components
-
-            Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
-            fluid nodes are considered.
             """
             return reduce(operator.add, map(lambda A, G, psi_s: jnp.dot((1 - A) * G * self.G_ff * psi_s, c), list(Ai), list(g_kkprime), psi_s_tree))
 
         def ffk_2(Ai):
             """
             Zhang-Chen interaction force.
-
-            Interaction force must only be applied if neighboring nodes are fluid nodes. 1 - solid_mask ensures that only
-            fluid nodes are considered.
             """
             return reduce(operator.add, map(lambda A, U_s: A * jnp.dot(self.G_ff * U_s, c), list(Ai), U_s_tree))
 
@@ -840,10 +834,7 @@ class Multiphase(LBMBase):
         """
         f_postcollision_tree = self.collision(f_poststreaming_tree)
         f_postcollision_tree = self.apply_bc(f_postcollision_tree, f_poststreaming_tree, timestep, "PostCollision")
-        f_poststreaming_tree = map(
-            lambda f_postcollision: self.streaming(f_postcollision),
-            f_postcollision_tree,
-        )
+        f_poststreaming_tree = map(lambda f_postcollision: self.streaming(f_postcollision), f_postcollision_tree)
         f_poststreaming_tree = self.apply_bc(f_poststreaming_tree, f_postcollision_tree, timestep, "PostStreaming")
 
         if return_fpost:

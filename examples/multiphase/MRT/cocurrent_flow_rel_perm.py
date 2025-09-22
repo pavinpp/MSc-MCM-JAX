@@ -183,15 +183,15 @@ class CocurrentFlow(MultiphaseMRT):
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
-        rho = np.array(kwargs.get("rho_total")[0, :, :, :])
-        rho_w = np.array(kwargs["rho_tree"][0][0, :, :, :])
-        rho_nw = np.array(kwargs["rho_tree"][1][0, :, :, :])
-        p_w = np.array(kwargs["p_tree"][0][:, :])
-        p_nw = np.array(kwargs["p_tree"][1][:, :])
+        rho = np.array(kwargs.get("rho_total")[0, ...])
+        rho_w = np.array(kwargs["rho_tree"][0][0, ...])
+        rho_nw = np.array(kwargs["rho_tree"][1][0, ...])
+        p_w = np.array(kwargs["p_tree"][0][...])
+        p_nw = np.array(kwargs["p_tree"][1][...])
         p = np.array(kwargs["p"][0, :, :])
-        u_w = np.array(kwargs["u_tree"][0][0, :, :, :])
-        u_nw = np.array(kwargs["u_tree"][1][0, :, :, :])
-        u = np.array(kwargs["u_total"][0, :, :, :])
+        u_w = np.array(kwargs["u_tree"][0][0, ...])
+        u_nw = np.array(kwargs["u_tree"][1][0, ...])
+        u = np.array(kwargs["u_total"][0, ...])
         timestep = kwargs["timestep"]
         fields = {
             "p": p[..., 0],

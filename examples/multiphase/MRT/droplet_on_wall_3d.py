@@ -55,8 +55,8 @@ class DropletOnWall3D(MultiphaseMRT):
         )
 
     def output_data(self, **kwargs):
-        rho = np.array(kwargs["rho_tree"][0][0, :, :, :])
-        u = np.array(kwargs["u_tree"][0][0, :, :, :])
+        rho = np.array(kwargs["rho_tree"][0][0, ...])
+        u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
         fields = {
             "rho": rho[..., 0],

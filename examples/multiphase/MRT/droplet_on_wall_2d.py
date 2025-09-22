@@ -38,34 +38,17 @@ class DropletOnWall2D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         self.BCs[0].append(
-            BounceBack(
-                tuple(ind.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta[tuple(ind.T)],
-                phi[tuple(ind.T)],
-                delta_rho[tuple(ind.T)],
-            )
+            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy, theta[tuple(ind.T)], phi[tuple(ind.T)], delta_rho[tuple(ind.T)])
         )
 
     def output_data(self, **kwargs):
-        rho = np.array(kwargs["rho_tree"][0][0, :, :, :])
-        u = np.array(kwargs["u_tree"][0][0, :, :, :])
+        rho = np.array(kwargs["rho_tree"][0][0, ...])
+        u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-            "flag": np.array(self.solid_mask_streamed[0][..., 0]),
-        }
+        fields = {"rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1], "flag": np.array(self.solid_mask_streamed[0][..., 0])}
         u_sp = np.sqrt(np.sum(np.square(u), axis=-1))
         print(f"Max spurious velocity: {np.max(u_sp)}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":
