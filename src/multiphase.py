@@ -1217,10 +1217,7 @@ class MultiphaseMRT(Multiphase):
 
     @partial(jit, static_argnums=(0,))
     def adjust_surface_tension(self, psi_tree):
-        psi_s_tree = map(
-            lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)),
-            psi_tree,
-        )
+        psi_s_tree = map(lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)), psi_tree)
         c = jnp.transpose(self.c)
         if isinstance(self.lattice, LatticeD2Q9):
             tm1 = lambda i, j, psi, psi_s: psi[..., 0] * jnp.dot(self.G_ff * (psi_s - psi), c[:, i] * c[:, j])
