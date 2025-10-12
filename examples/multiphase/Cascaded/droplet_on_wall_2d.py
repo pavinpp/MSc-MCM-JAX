@@ -151,8 +151,8 @@ class DropletOnWall2D(MultiphaseCascade):
         )
 
     def output_data(self, **kwargs):
-        rho_water = np.array(kwargs["rho_prev_tree"][0][0, ...])
-        rho_air = np.array(kwargs["rho_prev_tree"][1][0, ...])
+        rho_water = np.array(kwargs["rho_tree"][0][0, ...])
+        rho_air = np.array(kwargs["rho_tree"][1][0, ...])
         p = np.array(kwargs["p"][0, ...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
