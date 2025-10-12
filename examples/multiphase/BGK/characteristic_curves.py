@@ -36,11 +36,7 @@ class Droplet3D(MultiphaseBGK):
         rho_outside = rho_w_g
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
@@ -49,20 +45,12 @@ class Droplet3D(MultiphaseBGK):
         rho_outside = rho_a_l
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, self.nz, 3))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 3),
-            self.precisionPolicy.compute_dtype,
-            init_val=u,
-        )
+        u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -126,12 +114,7 @@ class Droplet3D(MultiphaseBGK):
         print(f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}")
         print(f"rho_l: {rho_l_pred}, rho_g: {rho_g_pred}")
 
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{r}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{r}", "data")
         if timestep == 20000:
             file.write(f"{r},{pressure_difference}\n")
 
@@ -159,11 +142,7 @@ class DropletOnWall3D(MultiphaseBGK):
         rho_outside = rho_a_l
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
@@ -176,24 +155,10 @@ class DropletOnWall3D(MultiphaseBGK):
 
     def set_boundary_conditions(self):
         self.BCs[0].append(
-            BounceBack(
-                tuple(ind.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_w[tuple(ind.T)],
-                phi_w[tuple(ind.T)],
-                delta_rho_w[tuple(ind.T)],
-            )
+            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy, theta_w[tuple(ind.T)], phi_w[tuple(ind.T)], delta_rho_w[tuple(ind.T)])
         )
         self.BCs[1].append(
-            BounceBack(
-                tuple(ind.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_a[tuple(ind.T)],
-                phi_a[tuple(ind.T)],
-                delta_rho_a[tuple(ind.T)],
-            )
+            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy, theta_a[tuple(ind.T)], phi_a[tuple(ind.T)], delta_rho_a[tuple(ind.T)])
         )
 
     @partial(jit, static_argnums=(0,))
@@ -240,11 +205,7 @@ class PorousMedia(MultiphaseBGK):
             # rho[..., 0] = 0.5 * (rho_w_l + rho_w_g) - 0.5 * (
             #     rho_w_l - rho_w_g
             # ) * np.tanh(2 * (x - buffer) / width)
-            rho = self.distributed_array_init(
-                (self.nx, self.ny, self.nz, 1),
-                self.precisionPolicy.compute_dtype,
-                init_val=rho,
-            )
+            rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
             rho = self.precisionPolicy.cast_to_output(rho)
             rho_tree.append(rho)
             # air
@@ -260,11 +221,7 @@ class PorousMedia(MultiphaseBGK):
             rho = self.precisionPolicy.cast_to_output(rho)
             rho_tree.append(rho)
             u = np.zeros((self.nx, self.ny, self.nz, 3))
-            u = self.distributed_array_init(
-                (self.nx, self.ny, self.nz, 3),
-                self.precisionPolicy.compute_dtype,
-                init_val=u,
-            )
+            u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
             u = self.precisionPolicy.cast_to_output(u)
             u_tree = []
             u_tree.append(u)
@@ -272,37 +229,21 @@ class PorousMedia(MultiphaseBGK):
         else:
             # Water
             rho = rho_w_l * np.ones((self.nx, self.ny, self.nz, 1))
-            rho = self.distributed_array_init(
-                (self.nx, self.ny, self.nz, 1),
-                self.precisionPolicy.compute_dtype,
-                init_val=rho,
-            )
+            rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
             rho = self.precisionPolicy.cast_to_output(rho)
             rho_tree.append(rho)
             # air
             rho = rho_a_g * np.ones((self.nx, self.ny, self.nz, 1))
-            rho = self.distributed_array_init(
-                (self.nx, self.ny, self.nz, 1),
-                self.precisionPolicy.compute_dtype,
-                init_val=rho,
-            )
+            rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
             rho = self.precisionPolicy.cast_to_output(rho)
             rho_tree.append(rho)
             u_tree = []
             u = np.zeros((self.nx, self.ny, self.nz, 3))
-            u = self.distributed_array_init(
-                (self.nx, self.ny, self.nz, 3),
-                self.precisionPolicy.compute_dtype,
-                init_val=u,
-            )
+            u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
             u = self.precisionPolicy.cast_to_output(u)
             u_tree.append(u)
             u = np.zeros((self.nx, self.ny, self.nz, 3))
-            u = self.distributed_array_init(
-                (self.nx, self.ny, self.nz, 3),
-                self.precisionPolicy.compute_dtype,
-                init_val=u,
-            )
+            u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
             u = self.precisionPolicy.cast_to_output(u)
             u_tree.append(u)
         return rho_tree, u_tree
@@ -334,25 +275,9 @@ class PorousMedia(MultiphaseBGK):
             self.BCs[1].append(EquilibriumBC(tuple(inlet.T), self.gridInfo, self.precisionPolicy, rho_inlet, vel))
             outlet = self.boundingBoxIndices["right"]
             rho_outlet = (rho_w_g - drho) * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-            self.BCs[0].append(
-                EquilibriumBC(
-                    tuple(outlet.T),
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    rho_outlet,
-                    vel,
-                )
-            )
+            self.BCs[0].append(EquilibriumBC(tuple(outlet.T), self.gridInfo, self.precisionPolicy, rho_outlet, vel))
             rho_outlet = (rho_a_l - drho) * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-            self.BCs[1].append(
-                EquilibriumBC(
-                    tuple(outlet.T),
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    rho_outlet,
-                    vel,
-                )
-            )
+            self.BCs[1].append(EquilibriumBC(tuple(outlet.T), self.gridInfo, self.precisionPolicy, rho_outlet, vel))
             wall = np.concatenate((
                 self.boundingBoxIndices["top"],
                 self.boundingBoxIndices["bottom"],
@@ -362,16 +287,7 @@ class PorousMedia(MultiphaseBGK):
             wall = tuple(wall.T)
             self.BCs[0].append(BounceBack(wall, self.gridInfo, self.precisionPolicy))
             wall = tuple(idx.T)
-            self.BCs[0].append(
-                BounceBack(
-                    wall,
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    theta_w[wall],
-                    phi_w[wall],
-                    delta_rho_w[wall],
-                )
-            )
+            self.BCs[0].append(BounceBack(wall, self.gridInfo, self.precisionPolicy, theta_w[wall], phi_w[wall], delta_rho_w[wall]))
             wall = np.concatenate((
                 self.boundingBoxIndices["top"],
                 self.boundingBoxIndices["bottom"],
@@ -381,16 +297,7 @@ class PorousMedia(MultiphaseBGK):
             wall = tuple(wall.T)
             self.BCs[1].append(BounceBack(wall, self.gridInfo, self.precisionPolicy))
             wall = tuple(idx.T)
-            self.BCs[1].append(
-                BounceBack(
-                    wall,
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    theta_a[wall],
-                    phi_a[wall],
-                    delta_rho_a[wall],
-                )
-            )
+            self.BCs[1].append(BounceBack(wall, self.gridInfo, self.precisionPolicy, theta_a[wall], phi_a[wall], delta_rho_a[wall]))
         else:
             inlet = self.boundingBoxIndices["left"]
             rho_inlet = (rho_w_l + drho) * np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
@@ -400,25 +307,9 @@ class PorousMedia(MultiphaseBGK):
             self.BCs[1].append(EquilibriumBC(tuple(inlet.T), self.gridInfo, self.precisionPolicy, rho_inlet, vel))
             outlet = self.boundingBoxIndices["right"]
             rho_outlet = (rho_w_l - drho) * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-            self.BCs[0].append(
-                EquilibriumBC(
-                    tuple(outlet.T),
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    rho_outlet,
-                    vel,
-                )
-            )
+            self.BCs[0].append(EquilibriumBC(tuple(outlet.T), self.gridInfo, self.precisionPolicy, rho_outlet, vel))
             rho_outlet = (rho_a_g - drho) * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-            self.BCs[1].append(
-                EquilibriumBC(
-                    tuple(outlet.T),
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    rho_outlet,
-                    vel,
-                )
-            )
+            self.BCs[1].append(EquilibriumBC(tuple(outlet.T), self.gridInfo, self.precisionPolicy, rho_outlet, vel))
             wall = np.concatenate((
                 self.boundingBoxIndices["top"],
                 self.boundingBoxIndices["bottom"],
@@ -428,16 +319,7 @@ class PorousMedia(MultiphaseBGK):
             wall = tuple(wall.T)
             self.BCs[0].append(BounceBack(wall, self.gridInfo, self.precisionPolicy))
             wall = tuple(idx.T)
-            self.BCs[0].append(
-                BounceBack(
-                    wall,
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    theta_w[wall],
-                    phi_w[wall],
-                    delta_rho_w[wall],
-                )
-            )
+            self.BCs[0].append(BounceBack(wall, self.gridInfo, self.precisionPolicy, theta_w[wall], phi_w[wall], delta_rho_w[wall]))
             wall = np.concatenate((
                 self.boundingBoxIndices["top"],
                 self.boundingBoxIndices["bottom"],
@@ -447,16 +329,7 @@ class PorousMedia(MultiphaseBGK):
             wall = tuple(wall.T)
             self.BCs[1].append(BounceBack(wall, self.gridInfo, self.precisionPolicy))
             wall = tuple(idx.T)
-            self.BCs[1].append(
-                BounceBack(
-                    wall,
-                    self.gridInfo,
-                    self.precisionPolicy,
-                    theta_a[wall],
-                    phi_a[wall],
-                    delta_rho_a[wall],
-                )
-            )
+            self.BCs[1].append(BounceBack(wall, self.gridInfo, self.precisionPolicy, theta_a[wall], phi_a[wall], delta_rho_a[wall]))
 
     def output_data(self, **kwargs):
         rho = np.array(kwargs.get("rho_total")[0, :, 1:-1, 1:-1, :])
@@ -477,12 +350,7 @@ class PorousMedia(MultiphaseBGK):
             "p_water": p_water[..., 0],
             "flag": self.solid_mask_streamed[0][:, 1:-1, 1:-1, 0],
         }
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{simulation}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{simulation}", "data")
 
         # Computing capillary pressure, saturation using values inside porous media only
         rho_water = rho_water[buffer : buffer + self.nx, ...]

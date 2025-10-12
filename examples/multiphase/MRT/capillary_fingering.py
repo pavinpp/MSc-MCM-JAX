@@ -75,12 +75,7 @@ class Droplet2D(MultiphaseMRT):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -90,12 +85,7 @@ class Droplet2D(MultiphaseMRT):
         p_i = np.array(kwargs["p_tree"][1][...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
+        fields = {"p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
         offset_x = 95
         offset_y = 95
         p_north = p_d[self.nx // 2, self.ny // 2 - offset_y, 0]
@@ -104,12 +94,7 @@ class Droplet2D(MultiphaseMRT):
         p_east = p_d[self.nx // 2 + offset_x, self.ny // 2, 0]
         pressure_difference = p_i[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
         print(f"Pressure difference: {pressure_difference}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{r}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{r}", "data")
         file.write(f"{r},{pressure_difference}\n")
 
 
@@ -151,29 +136,16 @@ class CapillaryFingering(MultiphaseMRT):
         # )
 
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate((
-            self.boundingBoxIndices["top"],
-            self.boundingBoxIndices["bottom"],
-        ))
+        walls = np.concatenate((self.boundingBoxIndices["top"], self.boundingBoxIndices["bottom"]))
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(
             BounceBack(
-                tuple(walls.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_1[tuple(walls.T)],
-                phi_1[tuple(walls.T)],
-                delta_rho_1[tuple(walls.T)],
+                tuple(walls.T), self.gridInfo, self.precisionPolicy, theta_1[tuple(walls.T)], phi_1[tuple(walls.T)], delta_rho_1[tuple(walls.T)]
             )
         )
         self.BCs[1].append(
             BounceBack(
-                tuple(walls.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_2[tuple(walls.T)],
-                phi_2[tuple(walls.T)],
-                delta_rho_2[tuple(walls.T)],
+                tuple(walls.T), self.gridInfo, self.precisionPolicy, theta_2[tuple(walls.T)], phi_2[tuple(walls.T)], delta_rho_2[tuple(walls.T)]
             )
         )
 
@@ -190,7 +162,7 @@ class CapillaryFingering(MultiphaseMRT):
         #     yy_inlet,
         #     yy_inlet.min(),
         #     yy_inlet.max() - yy_inlet.min(),
-        #     3.0 / 2.0 * prescribed_vel,
+        #     3.0 / 2.0 * prescribed_vel
         # )
         # self.BCs[0].append(
         #     EquilibriumBC(
@@ -198,7 +170,7 @@ class CapillaryFingering(MultiphaseMRT):
         #         self.gridInfo,
         #         self.precisionPolicy,
         #         rho_inlet,
-        #         vel_inlet,
+        #         vel_inlet
         #     )
         # )
         # rho_inlet = (
@@ -211,7 +183,7 @@ class CapillaryFingering(MultiphaseMRT):
         #     yy_inlet,
         #     yy_inlet.min(),
         #     yy_inlet.max() - yy_inlet.min(),
-        #     3.0 / 2.0 * prescribed_vel,
+        #     3.0 / 2.0 * prescribed_vel
         # )
         # self.BCs[1].append(
         #     EquilibriumBC(
@@ -219,7 +191,7 @@ class CapillaryFingering(MultiphaseMRT):
         #         self.gridInfo,
         #         self.precisionPolicy,
         #         rho_inlet,
-        #         vel_inlet,
+        #         vel_inlet
         #     )
         # )
         #
@@ -236,7 +208,7 @@ class CapillaryFingering(MultiphaseMRT):
         #     yy_outlet,
         #     yy_outlet.min(),
         #     yy_outlet.max() - yy_outlet.min(),
-        #     3.0 / 2.0 * prescribed_vel,
+        #     3.0 / 2.0 * prescribed_vel
         # )
         # self.BCs[0].append(
         #     EquilibriumBC(
@@ -244,7 +216,7 @@ class CapillaryFingering(MultiphaseMRT):
         #         self.gridInfo,
         #         self.precisionPolicy,
         #         rho_outlet,
-        #         vel_outlet,
+        #         vel_outlet
         #     )
         # )
         # rho_outlet = (
@@ -257,7 +229,7 @@ class CapillaryFingering(MultiphaseMRT):
         #     yy_outlet,
         #     yy_outlet.min(),
         #     yy_outlet.max() - yy_outlet.min(),
-        #     3.0 / 2.0 * prescribed_vel,
+        #     3.0 / 2.0 * prescribed_vel
         # )
         # self.BCs[1].append(
         #     EquilibriumBC(
@@ -265,7 +237,7 @@ class CapillaryFingering(MultiphaseMRT):
         #         self.gridInfo,
         #         self.precisionPolicy,
         #         rho_outlet,
-        #         vel_outlet,
+        #         vel_outlet
         #     )
         # )
 
@@ -279,12 +251,7 @@ class CapillaryFingering(MultiphaseMRT):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -312,12 +279,7 @@ class CapillaryFingering(MultiphaseMRT):
             "ux": u[..., 0],
             "uy": u[..., 1],
         }
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_fx_{fx}_visc_ratio_{visc_ratio}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_fx_{fx}_visc_ratio_{visc_ratio}", "data")
 
 
 if __name__ == "__main__":

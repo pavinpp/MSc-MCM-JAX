@@ -66,12 +66,7 @@ class Droplet2D(MultiphaseMRT):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)

@@ -223,11 +223,7 @@ class PorousMedia(MultiphaseMRT):
         # )
         rho = rho_w_l * np.ones((self.nx, self.ny, self.nz, 1))
         # rho[tuple(idx.T)] = 1.0
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
@@ -241,20 +237,12 @@ class PorousMedia(MultiphaseMRT):
         #     2 * (x - buffer) / width
         # )
         # rho[..., 0] = rho_
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, self.nz, 3))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 3),
-            self.precisionPolicy.compute_dtype,
-            init_val=u,
-        )
+        u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)

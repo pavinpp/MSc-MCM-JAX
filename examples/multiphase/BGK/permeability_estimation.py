@@ -39,20 +39,12 @@ class PorousMedia(MultiphaseBGK):
         rho_tree = []
 
         rho = np.ones((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, self.nz, 3))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 3),
-            self.precisionPolicy.compute_dtype,
-            init_val=u,
-        )
+        u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -62,28 +54,12 @@ class PorousMedia(MultiphaseBGK):
         # apply inlet equilibrium boundary condition at the left
         inlet = self.boundingBoxIndices["left"]
         rho_inlet = np.ones((inlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-        self.BCs[0].append(
-            Regularized(
-                tuple(inlet.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                "pressure",
-                rho_inlet,
-            )
-        )
+        self.BCs[0].append(Regularized(tuple(inlet.T), self.gridInfo, self.precisionPolicy, "pressure", rho_inlet))
 
         # Same at the outlet
         outlet = self.boundingBoxIndices["right"]
         rho_outlet = 0.97 * np.ones((outlet.shape[0], 1), dtype=self.precisionPolicy.compute_dtype)
-        self.BCs[0].append(
-            Regularized(
-                tuple(outlet.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                "pressure",
-                rho_outlet,
-            )
-        )
+        self.BCs[0].append(Regularized(tuple(outlet.T), self.gridInfo, self.precisionPolicy, "pressure", rho_outlet))
 
         # Wall boundary condition
         ind = np.where(binary == 1.0)
@@ -99,14 +75,7 @@ class PorousMedia(MultiphaseBGK):
             self.boundingBoxIndices["back"],
         ))
         self.BCs[0].append(
-            BounceBack(
-                tuple(wall.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta[tuple(wall.T)],
-                phi[tuple(wall.T)],
-                delta_rho[tuple(wall.T)],
-            )
+            BounceBack(tuple(wall.T), self.gridInfo, self.precisionPolicy, theta[tuple(wall.T)], phi[tuple(wall.T)], delta_rho[tuple(wall.T)])
         )
 
     @partial(jit, static_argnums=(0,))
@@ -119,12 +88,7 @@ class PorousMedia(MultiphaseBGK):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -132,18 +96,8 @@ class PorousMedia(MultiphaseBGK):
         p = np.array(kwargs["p_tree"][0])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        fields = {"p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":

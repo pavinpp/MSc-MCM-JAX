@@ -43,10 +43,7 @@ class Channel2D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate((
-            self.boundingBoxIndices["top"],
-            self.boundingBoxIndices["bottom"],
-        ))
+        walls = np.concatenate((self.boundingBoxIndices["top"], self.boundingBoxIndices["bottom"]))
         walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta[walls], phi[walls], delta_rho[walls]))
@@ -61,12 +58,7 @@ class Channel2D(MultiphaseMRT):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -123,10 +115,7 @@ class CocurrentFlow(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         # concatenate the indices of the left, right, and bottom walls
-        walls = np.concatenate((
-            self.boundingBoxIndices["top"],
-            self.boundingBoxIndices["bottom"],
-        ))
+        walls = np.concatenate((self.boundingBoxIndices["top"], self.boundingBoxIndices["bottom"]))
         walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
         self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta_w[walls], phi_w[walls], delta_rho_w[walls]))
@@ -142,12 +131,7 @@ class CocurrentFlow(MultiphaseMRT):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
