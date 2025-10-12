@@ -43,36 +43,16 @@ class DropletOnWall3D(MultiphaseMRT):
         return rho_tree, u_tree
 
     def set_boundary_conditions(self):
-        self.BCs[0].append(
-            BounceBack(
-                ind,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta[ind],
-                phi[ind],
-                delta_rho[ind],
-            )
-        )
+        self.BCs[0].append(BounceBack(ind, self.gridInfo, self.precisionPolicy, theta[ind], phi[ind], delta_rho[ind]))
 
     def output_data(self, **kwargs):
         rho = np.array(kwargs["rho_tree"][0][0, ...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-            "uz": u[..., 2],
-            "flag": np.array(self.solid_mask_streamed[0][..., 0]),
-        }
+        fields = {"rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1], "uz": u[..., 2], "flag": np.array(self.solid_mask_streamed[0][..., 0])}
         u_sp = np.sqrt(np.sum(np.square(u), axis=-1))
         print(f"Max spurious velocity: {np.max(u_sp)}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":

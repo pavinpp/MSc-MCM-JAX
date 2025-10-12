@@ -47,16 +47,7 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
         ind_2 = np.array(np.where(sphere_2 <= 0)).T
         ind = np.concatenate((ind_1, ind_2))
         ind = tuple(ind.T)
-        self.BCs[0].append(
-            BounceBack(
-                ind,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta[ind],
-                phi[ind],
-                delta_rho[ind],
-            )
-        )
+        self.BCs[0].append(BounceBack(ind, self.gridInfo, self.precisionPolicy, theta[ind], phi[ind], delta_rho[ind]))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -64,12 +55,7 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
         p = np.array(kwargs["p"][0, ...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
+        fields = {"p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
         offset = 90
         rho_north = rho[self.nx // 2, self.ny // 2 - offset, 0]
         rho_south = rho[self.nx // 2, self.ny // 2 + offset, 0]
@@ -87,12 +73,7 @@ class DropletOnCurvedSurface2D(MultiphaseMRT):
         p_east = p[self.nx // 2 + offset, self.ny // 2, 0]
         pressure_difference = p[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
         print(f"Pressure difference: {pressure_difference}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":

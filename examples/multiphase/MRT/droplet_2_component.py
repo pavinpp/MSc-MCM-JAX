@@ -107,12 +107,7 @@ class Droplet2D(MultiphaseMRT):
         p_east = p_1[self.nx // 2 + offset, self.ny // 2, 0]
         pressure_difference = p_2[self.nx // 2, self.ny // 2, 0] - 0.25 * (p_north + p_south + p_west + p_east)
         print(f"Pressure difference for radius = {r}: {pressure_difference}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{r}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{r}", "data")
 
 
 if __name__ == "__main__":

@@ -36,11 +36,7 @@ class Droplet3D(MultiphaseMRT):
         rho_outside = rho_w_g
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
@@ -49,20 +45,12 @@ class Droplet3D(MultiphaseMRT):
         rho_outside = rho_c_l
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
         u = np.zeros((self.nx, self.ny, self.nz, 3))
-        u = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 3),
-            self.precisionPolicy.compute_dtype,
-            init_val=u,
-        )
+        u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
         u_tree = []
         u_tree.append(u)
@@ -126,12 +114,7 @@ class Droplet3D(MultiphaseMRT):
         rho_l_pred = rho_water[self.nx // 2, self.ny // 2, self.nz // 2, 0]
         print(f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}")
 
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{r}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{r}", "data")
 
 
 # Multi-component droplet on wall example to tune contact angle
@@ -145,11 +128,7 @@ class DropletOnWall3D(MultiphaseMRT):
         rho_outside = rho_w_g
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
@@ -158,11 +137,7 @@ class DropletOnWall3D(MultiphaseMRT):
         rho_outside = rho_c_l
         rho = 0.5 * (rho_inside + rho_outside) - 0.5 * (rho_inside - rho_outside) * np.tanh(2 * (dist - r) / width)
         rho = rho.reshape((self.nx, self.ny, self.nz, 1))
-        rho = self.distributed_array_init(
-            (self.nx, self.ny, self.nz, 1),
-            self.precisionPolicy.compute_dtype,
-            init_val=rho,
-        )
+        rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
         rho = self.precisionPolicy.cast_to_output(rho)
         rho_tree.append(rho)
 
@@ -175,24 +150,10 @@ class DropletOnWall3D(MultiphaseMRT):
 
     def set_boundary_conditions(self):
         self.BCs[0].append(
-            BounceBack(
-                tuple(ind.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_w[tuple(ind.T)],
-                phi_w[tuple(ind.T)],
-                delta_rho_w[tuple(ind.T)],
-            )
+            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy, theta_w[tuple(ind.T)], phi_w[tuple(ind.T)], delta_rho_w[tuple(ind.T)])
         )
         self.BCs[1].append(
-            BounceBack(
-                tuple(ind.T),
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_c[tuple(ind.T)],
-                phi_c[tuple(ind.T)],
-                delta_rho_c[tuple(ind.T)],
-            )
+            BounceBack(tuple(ind.T), self.gridInfo, self.precisionPolicy, theta_c[tuple(ind.T)], phi_c[tuple(ind.T)], delta_rho_c[tuple(ind.T)])
         )
 
     def output_data(self, **kwargs):
@@ -241,12 +202,7 @@ class DropletOnWall3D(MultiphaseMRT):
         rho_l_pred = rho_water[self.nx // 2, self.ny // 2, self.nz // 2, 0]
         print(f"%Error Water Min: {(rho_g_pred - rho_w_g) * 100 / rho_w_g} Max: {(rho_l_pred - rho_w_l) * 100 / rho_w_l}")
 
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{r}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{r}", "data")
 
 
 class PorousMedia(MultiphaseMRT):
@@ -379,26 +335,8 @@ class PorousMedia(MultiphaseMRT):
         # )
         wall = idx
         wall = tuple(wall.T)
-        self.BCs[0].append(
-            BounceBack(
-                wall,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_w[wall],
-                phi_w[wall],
-                delta_rho_w[wall],
-            )
-        )
-        self.BCs[1].append(
-            BounceBack(
-                wall,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_c[wall],
-                phi_c[wall],
-                delta_rho_c[wall],
-            )
-        )
+        self.BCs[0].append(BounceBack(wall, self.gridInfo, self.precisionPolicy, theta_w[wall], phi_w[wall], delta_rho_w[wall]))
+        self.BCs[1].append(BounceBack(wall, self.gridInfo, self.precisionPolicy, theta_c[wall], phi_c[wall], delta_rho_c[wall]))
 
     def output_data(self, **kwargs):
         # 1:-1 to remove boundary voxels (not needed for visualization when using full-way bounce-back)
@@ -431,12 +369,7 @@ class PorousMedia(MultiphaseMRT):
             "theta_c": theta_c[1:-1, 1:-1, 1:-1, 0],
             "flag": self.solid_mask_streamed[0][1:-1, 1:-1, 1:-1, 0],
         }
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":

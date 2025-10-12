@@ -49,16 +49,7 @@ class Channel2D(MultiphaseMRT):
         ))
         walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
-        self.BCs[0].append(
-            BounceBack(
-                walls,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta[walls],
-                phi[walls],
-                delta_rho[walls],
-            )
-        )
+        self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta[walls], phi[walls], delta_rho[walls]))
 
     @partial(jit, static_argnums=(0,))
     def compute_potential(self, rho_tree):
@@ -94,12 +85,7 @@ class Channel2D(MultiphaseMRT):
             "ux_total": u_total[..., 0],
             "uy_total": u_total[..., 1],
         }
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_channel_{wetting_type}_visc_ratio_{visc_ratio}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_channel_{wetting_type}_visc_ratio_{visc_ratio}", "data")
         if timestep == 20000:
             Q = np.sum(u[self.nx // 2, :, 0])
             file.write(f"{wetting_type},{visc_ratio},{Q}\n")
@@ -143,26 +129,8 @@ class CocurrentFlow(MultiphaseMRT):
         ))
         walls = tuple(walls.T)
         # apply bounce back boundary condition to the walls
-        self.BCs[0].append(
-            BounceBack(
-                walls,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_w[walls],
-                phi_w[walls],
-                delta_rho_w[walls],
-            )
-        )
-        self.BCs[1].append(
-            BounceBack(
-                walls,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta_nw[walls],
-                phi_nw[walls],
-                delta_rho_nw[walls],
-            )
-        )
+        self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta_w[walls], phi_w[walls], delta_rho_w[walls]))
+        self.BCs[1].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta_nw[walls], phi_nw[walls], delta_rho_nw[walls]))
 
     @partial(jit, static_argnums=(0,))
     def compute_potential(self, rho_tree):
@@ -207,12 +175,7 @@ class CocurrentFlow(MultiphaseMRT):
             "ux": u[..., 0],
             "uy": u[..., 1],
         }
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_cocurrent_flow_a_{a}_visc_ratio_{visc_ratio}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_cocurrent_flow_a_{a}_visc_ratio_{visc_ratio}", "data")
 
         S_nw = 2 * a / self.ny
         S_w = 1 - S_nw

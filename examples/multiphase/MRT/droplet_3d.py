@@ -58,13 +58,7 @@ class Droplet3D(MultiphaseMRT):
         p = np.array(kwargs["p_tree"][0][1:-1, 1:-1, 1:-1, :])
         u = np.array(kwargs["u_tree"][0][0, 1:-1, 1:-1, 1:-1, :])
         timestep = kwargs["timestep"]
-        fields = {
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-            "uz": u[..., 2],
-        }
+        fields = {"p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1], "uz": u[..., 2]}
         offset = 95
         rho_north = rho[self.nx // 2, self.ny // 2 - offset, self.nz // 2, 0]
         rho_south = rho[self.nx // 2, self.ny // 2 + offset, self.nz // 2, 0]
@@ -86,12 +80,7 @@ class Droplet3D(MultiphaseMRT):
         p_back = p[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
         pressure_difference = p[self.nx // 2, self.ny // 2, self.nz // 2, 0] - (p_north + p_south + p_west + p_east + p_front + p_back) / 6
         print(f"Pressure difference: {pressure_difference}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":

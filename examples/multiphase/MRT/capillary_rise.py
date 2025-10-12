@@ -47,12 +47,7 @@ class Droplet2D(MultiphaseMRT):
         p = np.array(kwargs["p"][0, ...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
+        fields = {"p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
         offset_x = 95
         offset_y = 95
         rho_north = rho[self.nx // 2, self.ny // 2 - offset_y, 0]
@@ -73,12 +68,7 @@ class Droplet2D(MultiphaseMRT):
         print(f"Pressure difference: {pressure_difference}")
         if timestep == 60000:
             file.write(f"{1 / r},{pressure_difference}\n")
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{r}",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, f"output_{r}", "data")
 
 
 # Estimate contact angle
@@ -115,18 +105,8 @@ class DropletOnSurface2D(MultiphaseMRT):
         p = np.array(kwargs["p"][0, ...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
-        save_fields_vtk(
-            timestep,
-            fields,
-            f"output_{disp}",
-            "data",
-        )
+        fields = {"p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
+        save_fields_vtk(timestep, fields, f"output_{disp}", "data")
 
 
 class CapillaryRise2D(MultiphaseMRT):
@@ -160,35 +140,15 @@ class CapillaryRise2D(MultiphaseMRT):
         )
         walls = np.concatenate((top_wall, bottom_wall))
         walls = tuple(walls.T)
-        self.BCs[0].append(
-            BounceBack(
-                walls,
-                self.gridInfo,
-                self.precisionPolicy,
-                theta[walls],
-                phi[walls],
-                delta_rho[walls],
-            )
-        )
+        self.BCs[0].append(BounceBack(walls, self.gridInfo, self.precisionPolicy, theta[walls], phi[walls], delta_rho[walls]))
 
     def output_data(self, **kwargs):
         rho = np.array(kwargs["rho_prev_tree"][0][0, ...])
         p = np.array(kwargs["p_tree"][0][...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "flag": self.solid_mask_streamed[0][..., 0],
-            "p": p[..., 0],
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output_",
-            "data",
-        )
+        fields = {"flag": self.solid_mask_streamed[0][..., 0], "p": p[..., 0], "rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
+        save_fields_vtk(timestep, fields, "output_", "data")
         ind_mid = np.argmin(p[150:451, self.ny // 2, 0])
         ind_side = np.argmin(p[150:451, self.ny - 30, 0])
         meniscus_position = ind_mid
