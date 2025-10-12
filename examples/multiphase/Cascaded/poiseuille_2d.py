@@ -56,28 +56,14 @@ class Poiseuille2D(MultiphaseCascade):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         rho = np.array(kwargs["rho_tree"][0][0, ...])
         u = np.array(kwargs["u_tree"][0][0, ...])
         timestep = kwargs["timestep"]
-        fields = {
-            "rho": rho[..., 0],
-            "ux": u[..., 0],
-            "uy": u[..., 1],
-        }
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        fields = {"rho": rho[..., 0], "ux": u[..., 0], "uy": u[..., 1]}
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":

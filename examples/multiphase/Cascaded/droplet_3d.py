@@ -60,12 +60,7 @@ class Droplet3D(MultiphaseCascade):
         def f(g_kk):
             return reduce(operator.add, map(lambda _gkk, psi: _gkk * psi, list(g_kk), psi_tree))
 
-        return map(
-            lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt,
-            rho_tree,
-            psi_tree,
-            list(vmap(f, in_axes=(0,))(self.g_kkprime)),
-        )
+        return map(lambda rho, psi, nt: rho / 3 + 1.5 * psi * nt, rho_tree, psi_tree, list(vmap(f, in_axes=(0,))(self.g_kkprime)))
 
     def output_data(self, **kwargs):
         rho = np.array(kwargs["rho_tree"][0][0, ...])
@@ -94,12 +89,7 @@ class Droplet3D(MultiphaseCascade):
         p_back = p[self.nx // 2 + offset, self.ny // 2, self.nz // 2 - offset, 0]
         pressure_difference = p[self.nx // 2, self.ny // 2, self.nz // 2, 0] - (p_north + p_south + p_west + p_east + p_front + p_back) / 6
         print(f"Pressure difference: {pressure_difference}")
-        save_fields_vtk(
-            timestep,
-            fields,
-            "output",
-            "data",
-        )
+        save_fields_vtk(timestep, fields, "output", "data")
 
 
 if __name__ == "__main__":
