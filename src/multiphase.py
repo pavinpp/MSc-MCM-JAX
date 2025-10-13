@@ -640,8 +640,8 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        f_tree: pytree of jax.numpy.ndarray
-            Pytree of distribution array.
+        rho_tree: pytree of jax.numpy.ndarray
+            Pytree of density values.
 
         Returns
         -------
