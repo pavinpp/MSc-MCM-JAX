@@ -26,28 +26,30 @@ class NeuralNetwork(eqx.Module):
     nx: int
     ny: int
 
-    def __init__(self, key, nx, ny, hidden_features=256, in_channels=1, out_channels=1):
+    def __init__(self, key, nx, ny, hidden_features=512, in_channels=1, out_channels=1):
         self.nx = nx
         self.ny = ny
         in_features = nx * ny * in_channels
         out_features = nx * ny * out_channels
 
-        k1, k2, k3 = random.split(key, 3)
+        k1, k2, k3, k4 = random.split(key, 4)
         self.layers = [
-            eqx.nn.Linear(in_features, hidden_features // 2, key=k1),
+            eqx.nn.Linear(in_features, hidden_features, key=k1),
             eqx.nn.Lambda(nn.sigmoid),
-            eqx.nn.Linear(hidden_features // 2, hidden_features, key=k2),
+            eqx.nn.Linear(hidden_features, hidden_features // 2, key=k2),
             eqx.nn.Lambda(nn.sigmoid),
-            eqx.nn.Linear(hidden_features, out_features, key=k3),
+            eqx.nn.Linear(hidden_features // 2, hidden_features, key=k3),
+            eqx.nn.Lambda(nn.sigmoid),
+            eqx.nn.Linear(hidden_features, out_features, key=k4),
             eqx.nn.Lambda(nn.sigmoid),
         ]
 
     def __call__(self, x):
-        x_flat = x.flatten()
+        x_flat = x.flatten() / rho_l
         for layer in self.layers:
             x_flat = layer(x_flat)
         x_out = x_flat.reshape((self.nx, self.ny, 1))
-        return x_out
+        return rho_l * x_out
 
 
 class GroundTruthBGK(MultiphaseBGK):
@@ -139,9 +141,9 @@ def make_step(model, opt_state, sim_obj, rho_init_rand, rho_ground_truth, t_desi
 
 
 if __name__ == "__main__":
-    r = 60
-    nx = 300
-    ny = 300
+    r = 25
+    nx = 100
+    ny = 100
 
     width = 4
     a, b, R = 9 / 49, 2 / 21, 1.0
@@ -149,8 +151,6 @@ if __name__ == "__main__":
     Tc = 0.5714285714
     T = 0.8 * Tc
     precision = "f32/f32"
-
-    rho_l = rho_g + 0.001
 
     kwargs = {
         "n_components": 1,
@@ -173,6 +173,7 @@ if __name__ == "__main__":
         "restore_checkpoint": False,
     }
     sim_actual = GroundTruthBGK(**kwargs)
+    sim_actual.run(0)
 
     key = random.PRNGKey(10465)
     model = NeuralNetwork(key, nx, ny)
@@ -187,10 +188,10 @@ if __name__ == "__main__":
     optimizer_state = optimizer.init(eqx.filter(model, eqx.is_array))
 
     # designated_timestep
-    t_designated = 200
+    t_designated = 900
 
     # Initial random density field for the CNN
-    rho_init_rand = rho_g + 0.1 * np.random.rand(nx, ny, 1)
+    rho_init_rand = 0.5 * (rho_l + rho_g) + 0.1 * np.random.rand(nx, ny, 1)
 
     sim_pred = AutodiffMultiphaseBGK(model, **kwargs)
 
@@ -200,8 +201,8 @@ if __name__ == "__main__":
         debug.print("Epoch {}/{}, Loss: {}", epoch + 1, epochs, loss)
 
     # Simulations with trained model
-    kwargs.update({"io_rate": 10, "print_info_rate": 10})
+    kwargs.update({"io_rate": 1, "print_info_rate": 1})
 
     os.system("rm -rf output_predicted/")
     sim_pred = AutodiffMultiphaseBGK(model, **kwargs)
-    sim_pred.run(t_designated + 50)
+    sim_pred.run(t_designated + 20)

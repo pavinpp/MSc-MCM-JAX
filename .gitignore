@@ -161,5 +161,5 @@ venv.bak/
 dmypy.json
 
 
-# Checkpoints (default dir for XLB)
+# Checkpoints (default dir for JAX-LaB)
 checkpoints/*

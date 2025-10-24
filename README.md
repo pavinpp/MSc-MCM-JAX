@@ -1,7 +1,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 # JAX-LaB: A Python-based, Accelerated, Differentiable Massively Parallel Lattice Boltzmann Library for Modeling Multiphase and Multiphysics Flows & Physics-Based Machine Learning
 
-JAX-LaB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D Lattice Boltzmann Method (LBM) Python library written in [JAX](https://github.com/google/jax) and it provides a unified workflow for forward and 
+JAX-LaB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D Lattice Boltzmann Method (LBM) Python library written in [JAX](https://github.com/google/jax) and it provides a unified workflow for forward and
 inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://github.com/Autodesk/XLB) and adds support multiphase and multiphysics flows to the original library.
 
 ## Showcase
@@ -51,10 +51,10 @@ inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://g
 </p>
 
 <p align="center">
-  <img src="assets/XLB_diff.png" alt="" width="900">
+  <img src="assets/predicted.png" alt="" width="1000">
 </p>
 <p align="center">
-The stages of a fluid density field from an initial state to the emergence of the "XLB" pattern through deep learning optimization at timestep 200 (see paper for details)
+Temporal evolution of the density field determined using neural network for the inverse multiphase flow control problem of forming a circular pattern at t = 900. The MLP output is used as the initial condition for LBM and the backpropagation step during training leverages the auto-differentiation capabilities of JAX (see paper for details).
 </p>
 
 <br>
@@ -79,12 +79,12 @@ and **VanderWaals**.
 - **Density ratio independent surface tension** control by directly modifying pressure tensor.
 - **Improved wetting scheme** to handle large range of contact angles ($5 - 170^\circ$) **without large spurious current or thick layers near solid surface**.
 ### Multicomponent Flow Support
-JAX-LaB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any 
+JAX-LaB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any
 user modification.
 
 ## Wetting model
 - Wetting behavior of fluids is modeled using the [improved virtual density scheme](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.100.053313) which avoids the need to include separate fluid-solid interaction forces commonly seen in Shan-Chen method by directly updating the near-wall densities
-- Wetting parameters can be passed by user while defining wall boundary conditions. 
+- Wetting parameters can be passed by user while defining wall boundary conditions.
 
 ### Collision Models
 - **BGK**
@@ -223,4 +223,3 @@ python3 examples/singlephase/cavity2d.py
 - 🪨 **Particle Flows and Discrete Element Method:** Incorporating particle-based methods for granular and particulate flows.
 
 - 🔧 **Better Geometry Processing Pipelines:** Improving the handling and preprocessing of complex geometries for simulations. -->
-
