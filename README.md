@@ -54,7 +54,7 @@ inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://g
   <img src="assets/predicted.png" alt="" width="1000">
 </p>
 <p align="center">
-Temporal evolution of the density field determined using neural network for the inverse multiphase flow control problem of forming a circular pattern at t = 900. The MLP output is used as the initial condition for LBM and the backpropagation step during training leverages the auto-differentiation capabilities of JAX (see paper for details).
+Temporal evolution of the density field determined using neural network for the inverse multiphase flow control problem of forming a droplet at t = 900. The MLP output is used as the initial condition for LBM and the backpropagation step during training leverages the auto-differentiation capabilities of JAX (see paper for details).
 </p>
 
 <br>
