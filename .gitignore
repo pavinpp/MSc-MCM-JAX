@@ -18,6 +18,7 @@ tasks.json
 *png
 *pdf
 output*/
+
 # Exclusions
 !jax-lbm.png
 !airfoil.png
@@ -25,6 +26,7 @@ output*/
 !logo-transparent.png
 !building.png
 !XLB_diff.png
+!predicted.png
 
 # Geometry file
 assets/*.mat
