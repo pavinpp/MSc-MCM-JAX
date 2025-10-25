@@ -36,7 +36,7 @@ inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://g
 <p align="center">
   In-situ GPU rendering of drainage in a porous geometry. BGK collision model, 110 million cells.
 </p>
-<p align="center">
+<!--<p align="center">
   <img src="assets/car.png" alt="" width="500">
 </p>
 <p align="center">
@@ -48,13 +48,12 @@ inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://g
 </p>
 <p align="center">
   Airflow in to, out of, and within a building (~400 million cells)
-</p>
-
+</p>-->
 <p align="center">
   <img src="assets/predicted.png" alt="" width="1000">
 </p>
 <p align="center">
-Temporal evolution of the density field determined using neural network for the inverse multiphase flow control problem of forming a droplet at t = 900. The MLP output is used as the initial condition for LBM and the backpropagation step during training leverages the auto-differentiation capabilities of JAX (see paper for details).
+Temporal evolution of the density field determined using neural network for the inverse multiphase flow control problem of forming a droplet at t = 900. The MLP output is used as the initial condition for LBM and the backpropagation step during training leverages the auto-differentiation capabilities of JAX-LaB (see paper for details).
 </p>
 
 <br>
