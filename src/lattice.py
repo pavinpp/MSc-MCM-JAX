@@ -229,7 +229,7 @@ class LatticeD2Q9(Lattice):
         self.cs = jnp.sqrt(3) / 3.0
         self.cs2 = 1.0 / 3.0
         self.inv_cs2 = 3.0
-        self.i_s = jnp.asarray(list(range(9)))
+        self.i_s = jnp.asarray(list(range(9)), dtype=jnp.int8)
         self.im = 3  # Number of imiddles (includes center)
         self.ik = 3  # Number of iknowns or iunknowns
 

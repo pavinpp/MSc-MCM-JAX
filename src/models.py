@@ -321,6 +321,8 @@ class MRTSim(LBMBase):
                 ]),
                 dtype=self.precisionPolicy.compute_dtype,
             )
+        else:
+            NotImplementedError(f"Lattice type {self.lattice.name} has not been implemented")
 
     @partial(jit, static_argnums=(0,), donate_argnums=(1,))
     def collision(self, f):

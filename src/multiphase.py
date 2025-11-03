@@ -594,7 +594,7 @@ class Multiphase(LBMBase):
     @partial(jit, static_argnums=(0,))
     def compute_total_pressure(self, p_tree, rho_tree=None):
         """
-        Cpmpute the total combined pressure from all components.
+        Compute the total combined pressure from all components.
 
         Parameters
         ----------
