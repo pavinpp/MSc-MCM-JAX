@@ -1204,6 +1204,14 @@ class MultiphaseMRT(Multiphase):
             )
 
     @property
+    def omega(self):
+        return self._omega
+
+    @omega.setter
+    def omega(self, value=None):
+        self._omega = value
+
+    @property
     def M(self):
         return self._M
 
@@ -1477,6 +1485,14 @@ class MultiphaseCascade(Multiphase):
                 self.s_5,
                 self.s_6,
             )
+
+    @property
+    def omega(self):
+        return self._omega
+
+    @omega.setter
+    def omega(self, value=None):
+        self._omega = value
 
     @property
     def M(self):
