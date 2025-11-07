@@ -135,7 +135,6 @@ if __name__ == "__main__":
         "nz": 0,
         "g_kkprime": np.zeros((1, 1)),
         "body_force": F,
-        "omega": [s2],
         "k": [0.0],
         "A": np.zeros((1, 1)),
         "M": [M],

@@ -254,7 +254,6 @@ if __name__ == "__main__":
         "nz": 0,
         "g_kkprime": g_kkprime,
         "body_force": [0.0, 0.0],
-        "omega": [s2, s2],
         "EOS": eos,
         "k": [1.0, 1.0],
         "A": np.zeros((2, 2)),
