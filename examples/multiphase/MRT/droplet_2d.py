@@ -118,7 +118,6 @@ if __name__ == "__main__":
         "g_kkprime": -1.0 * np.ones((1, 1)),
         "EOS": eos,
         "body_force": [0.0, 0.0],
-        "omega": [1.0],
         "k": [0.16],
         "A": -0.032 * np.ones((1, 1)),
         "M": [M],

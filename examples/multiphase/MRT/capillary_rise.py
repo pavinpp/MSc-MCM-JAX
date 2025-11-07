@@ -201,7 +201,6 @@ if __name__ == "__main__":
         kwargs = {
             "n_components": 1,
             "lattice": LatticeD2Q9(precision),
-            "omega": [1.0],
             "nx": nx,
             "ny": ny,
             "nz": 0,
@@ -241,7 +240,6 @@ if __name__ == "__main__":
         kwargs = {
             "n_components": 1,
             "lattice": LatticeD2Q9(precision),
-            "omega": [1.0],
             "nx": nx,
             "ny": ny,
             "nz": 0,
@@ -279,7 +277,6 @@ if __name__ == "__main__":
     kwargs = {
         "n_components": 1,
         "lattice": LatticeD2Q9(precision),
-        "omega": [1.0],
         "nx": nx,
         "ny": ny,
         "nz": 0,

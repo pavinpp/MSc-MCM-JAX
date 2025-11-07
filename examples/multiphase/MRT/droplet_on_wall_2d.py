@@ -110,7 +110,6 @@ if __name__ == "__main__":
     delta_rho = 1.0 * np.ones((nx, ny, 1))
     kwargs = {
         "lattice": LatticeD2Q9(precision),
-        "omega": [1 / tau],
         "nx": nx,
         "ny": ny,
         "nz": 0,

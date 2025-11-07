@@ -179,7 +179,6 @@ if __name__ == "__main__":
     kwargs = {
         "n_components": 1,
         "lattice": LatticeD3Q19(precision),
-        "omega": [1.0],
         "nx": nx,
         "ny": ny,
         "nz": nz,

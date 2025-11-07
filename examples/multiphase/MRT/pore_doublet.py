@@ -221,7 +221,6 @@ if __name__ == "__main__":
         "nz": 0,
         "g_kkprime": g_kkprime,
         "body_force": [0.0, 0.0],
-        "omega": [1 / tau_1, 1 / tau_2],
         "precision": precision,
         "M": [M, M],
         "s_rho": s_rho,
