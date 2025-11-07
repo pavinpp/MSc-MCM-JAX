@@ -52,9 +52,7 @@ class Droplet3D(MultiphaseBGK):
         u = np.zeros((self.nx, self.ny, self.nz, 3))
         u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
-        u_tree = []
-        u_tree.append(u)
-        u_tree.append(u)
+        u_tree = [u, u]
         return rho_tree, u_tree
 
     @partial(jit, static_argnums=(0,))
@@ -148,9 +146,7 @@ class DropletOnWall3D(MultiphaseBGK):
 
         u = np.zeros((self.nx, self.ny, self.nz, 3))
         u = self.precisionPolicy.cast_to_output(u)
-        u_tree = []
-        u_tree.append(u)
-        u_tree.append(u)
+        u_tree = [u, u]
         return rho_tree, u_tree
 
     def set_boundary_conditions(self):
@@ -223,9 +219,7 @@ class PorousMedia(MultiphaseBGK):
             u = np.zeros((self.nx, self.ny, self.nz, 3))
             u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
             u = self.precisionPolicy.cast_to_output(u)
-            u_tree = []
-            u_tree.append(u)
-            u_tree.append(u)
+            u_tree = [u, u]
         else:
             # Water
             rho = rho_w_l * np.ones((self.nx, self.ny, self.nz, 1))
@@ -237,15 +231,11 @@ class PorousMedia(MultiphaseBGK):
             rho = self.distributed_array_init((self.nx, self.ny, self.nz, 1), self.precisionPolicy.compute_dtype, init_val=rho)
             rho = self.precisionPolicy.cast_to_output(rho)
             rho_tree.append(rho)
-            u_tree = []
+
             u = np.zeros((self.nx, self.ny, self.nz, 3))
             u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
             u = self.precisionPolicy.cast_to_output(u)
-            u_tree.append(u)
-            u = np.zeros((self.nx, self.ny, self.nz, 3))
-            u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
-            u = self.precisionPolicy.cast_to_output(u)
-            u_tree.append(u)
+            u_tree = [u, u]
         return rho_tree, u_tree
 
     @partial(jit, static_argnums=(0,))

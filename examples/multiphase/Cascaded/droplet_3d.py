@@ -45,8 +45,7 @@ class Droplet3D(MultiphaseCascade):
         u = np.zeros((self.nx, self.ny, self.nz, 3))
         u = self.distributed_array_init((self.nx, self.ny, self.nz, 3), self.precisionPolicy.compute_dtype, init_val=u)
         u = self.precisionPolicy.cast_to_output(u)
-        u_tree = []
-        u_tree.append(u)
+        u_tree = [u]
         return rho_tree, u_tree
 
     @partial(jit, static_argnums=(0,))

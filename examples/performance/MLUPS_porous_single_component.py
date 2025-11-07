@@ -39,8 +39,7 @@ class PorousMedia(MultiphaseBGK):
             init_val=u,
         )
         u = self.precisionPolicy.cast_to_output(u)
-        u_tree = []
-        u_tree.append(u)
+        u_tree = [u]
         return rho_tree, u_tree
 
     def set_boundary_conditions(self):

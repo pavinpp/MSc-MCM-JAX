@@ -48,8 +48,7 @@ class Droplet3D(MultiphaseMRT):
             init_val=u,
         )
         u = self.precisionPolicy.cast_to_output(u)
-        u_tree = []
-        u_tree.append(u)
+        u_tree = [u]
         return rho_tree, u_tree
 
     def output_data(self, **kwargs):
@@ -151,7 +150,7 @@ if __name__ == "__main__":
         "EOS": eos,
         "body_force": [0.0, 0.0, 0.0],
         "k": [0.27],
-        "A": [0.01 * np.ones((1, 1))],
+        "A": 0.01 * np.ones((1, 1)),
         "s_rho": s_rho,
         "s_e": s_e,
         "s_eta": s_eta,
