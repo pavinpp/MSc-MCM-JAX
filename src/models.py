@@ -283,7 +283,7 @@ class MRTSim(LBMBase):
         self.s_eta = kwargs.get("s_eta")
         self.s_j = kwargs.get("s_j")
         self.s_q = kwargs.get("s_q")
-        self.s_v = kwargs.get("s_v")
+        self.s_v = self.omega
         self.M_inv = jnp.array(
             np.transpose(np.linalg.inv(kwargs.get("M"))),
             dtype=self.precisionPolicy.compute_dtype,
