@@ -76,7 +76,7 @@ Temporal evolution of the density field determined using neural network for the 
 - Incorporates **Equation of State (EOS)** to model multiphase flows. Currently implemented EOS include **Carnahan-Starling**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong-Soave**
 and **VanderWaals**.
 - **Density ratio independent surface tension** control by directly modifying pressure tensor.
-- **Improved wetting scheme** to handle large range of contact angles ($5 - 170^\circ$) **without large spurious current or thick layers near solid surface**.
+- **Improved wetting scheme** to handle large range of contact angles **without large spurious current or thick layers near solid surface**.
 ### Multicomponent Flow Support
 JAX-LaB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any
 user modification.
