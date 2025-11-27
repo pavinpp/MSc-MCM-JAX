@@ -72,7 +72,7 @@ Temporal evolution of the density field determined using neural network for the 
 ## Capabilities
 ### Multiphase Flow Modeling
 **Shan-Chen** pseudopotential method with various modifications:
-- Support for **high density ratio flows** (tested for density ratios > 10^8) using improved forcing scheme.
+- Support for **high density ratio flows** (tested for density ratios > 10<sup>8</sup>) using improved forcing scheme.
 - Incorporates **Equation of State (EOS)** to model multiphase flows. Currently implemented EOS include **Carnahan-Starling**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong-Soave**
 and **VanderWaals**.
 - **Density ratio independent surface tension** control by directly modifying pressure tensor.
