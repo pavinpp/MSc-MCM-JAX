@@ -139,6 +139,8 @@ class Multiphase(LBMBase):
 
     @body_force.setter
     def body_force(self, value):
+        if value is None:
+            self._body_force = None
         if isinstance(value, list):
             self._body_force = jnp.array(np.array(value), dtype=self.precisionPolicy.compute_dtype)
         if isinstance(value, np.ndarray):
