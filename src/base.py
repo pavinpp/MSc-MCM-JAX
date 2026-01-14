@@ -35,10 +35,15 @@ class LBMBase(object):
     Parameters
     ----------
         lattice (object): The lattice object that contains the lattice structure and weights.
+
         omega (float): The relaxation parameter for the LBM simulation.
+
         nx (int): Number of grid points in the x-direction.
+
         ny (int): Number of grid points in the y-direction.
+
         nz (int, optional): Number of grid points in the z-direction. Defaults to 0.
+
         precision (str, optional): A string specifying the precision used for the simulation. Defaults to "f32/f32".
     """
 
@@ -411,14 +416,17 @@ class LBMBase(object):
 
         Parameters
         ----------
-            shape (tuple): The shape of the array to be created.
-            type (dtype): The data type of the array to be created.
-            init_val (scalar, optional): The initial value to fill the array with. Defaults to 0.
-            sharding (Sharding, optional): The sharding strategy to use. Defaults to `self.sharding`.
+        shape (tuple): The shape of the array to be created.
+
+        type (dtype): The data type of the array to be created.
+
+        init_val (scalar, optional): The initial value to fill the array with. Defaults to 0.
+
+        sharding (Sharding, optional): The sharding strategy to use. Defaults to `self.sharding`.
 
         Returns
         -------
-            jax.numpy.ndarray: A JAX array with the specified shape, data type, initial value, and sharding strategy.
+        jax.numpy.ndarray: A JAX array with the specified shape, data type, initial value, and sharding strategy.
         """
         if sharding is None:
             sharding = self.sharding
@@ -432,11 +440,11 @@ class LBMBase(object):
 
         Parameters
         ----------
-            solid_halo_voxels: A numpy array representing the voxels in the halo of the solid object.
+        solid_halo_voxels: A numpy array representing the voxels in the halo of the solid object.
 
         Returns
         -------
-            A JAX array representing the grid mask of the grid.
+        A JAX array representing the grid mask of the grid.
         """
         # Halo width (hw_x is different to accommodate the domain sharding per XLA device)
         hw_x = self.nDevices
@@ -490,9 +498,9 @@ class LBMBase(object):
 
         Returns
         -------
-            boundingBox (dict): A dictionary where keys are the names of the bounding box faces
-            ("bottom", "top", "left", "right" for 2D; additional "front", "back" for 3D), and values
-            are numpy arrays of indices corresponding to each face.
+        boundingBox (dict): A dictionary where keys are the names of the bounding box faces
+        ("bottom", "top", "left", "right" for 2D; additional "front", "back" for 3D), and values
+        are numpy arrays of indices corresponding to each face.
         """
         if self.dim == 2:
             # For a 2D grid, the bounding box consists of four edges: bottom, top, left, and right.
@@ -547,14 +555,14 @@ class LBMBase(object):
 
         Parameters
         ----------
-            precision (str): A string representing the desired precision. The string should be in the format
-            "computation/storage", where "computation" and "storage" are either "f64", "f32", or "f16",
-            representing 64-bit, 32-bit, or 16-bit floating point numbers, respectively.
+        precision (str): A string representing the desired precision. The string should be in the format
+        "computation/storage", where "computation" and "storage" are either "f64", "f32", or "f16",
+        representing 64-bit, 32-bit, or 16-bit floating point numbers, respectively.
 
         Returns
         -------
-            tuple: A pair of jax.numpy data types representing the computation and storage precisions, respectively.
-            If the input string does not match any of the predefined options, the function defaults to (jnp.float32, jnp.float32).
+        tuple: A pair of jax.numpy data types representing the computation and storage precisions, respectively.
+        If the input string does not match any of the predefined options, the function defaults to (jnp.float32, jnp.float32).
         """
         return {
             "f64/f64": (jnp.float64, jnp.float64),
@@ -575,7 +583,7 @@ class LBMBase(object):
 
         Returns
         -------
-            None, None: The default density and velocity, both None. This indicates that the actual values should be set elsewhere.
+        None, None: The default density and velocity, both None. This indicates that the actual values should be set elsewhere.
         """
         print("WARNING: Default initial conditions assumed: density = 1, velocity = 0")
         print("         To set explicit initial density and velocity, use self.initialize_macroscopic_fields.")
@@ -622,15 +630,13 @@ class LBMBase(object):
 
         Parameters
         ----------
-        rho0: jax.numpy.ndarray
-            The initial density field.
-        u0: jax.numpy.ndarray
-            The initial velocity field.
+        rho0 (jax.numpy.ndarray): Initial density field.
+
+        u0 (jax.numpy.ndarray): Initial velocity field.
 
         Returns
         -------
-        f: jax.numpy.ndarray
-            The array holding the initialized distribution functions for the simulation.
+        f (jax.numpy.ndarray): The array holding the initialized distribution functions for the simulation.
         """
         return self.equilibrium(rho0, u0)
 
@@ -641,15 +647,13 @@ class LBMBase(object):
 
         Parameters
         ----------
-        x: jax.numpy.ndarray
-            The data to be sent.
-        axis_name: str
-            The name of the axis along which the data is sent.
+        x (jax.numpy.ndarray): The data to be sent.
+
+        axis_name (str): The name of the axis along which the data is sent.
 
         Returns
         -------
-        jax.numpy.ndarray
-            The data after being sent to the right neighboring process.
+        (jax.numpy.ndarray): The data after being sent to the right neighboring process.
         """
         return lax.ppermute(x, perm=self.rightPerm, axis_name=axis_name)
 
@@ -660,14 +664,13 @@ class LBMBase(object):
 
         Parameters
         ----------
-        x: jax.numpy.ndarray
-            The data to be sent.
-        axis_name: str
-            The name of the axis along which the data is sent.
+        x (jax.numpy.ndarray): The data to be sent.
+
+        axis_name (str): The name of the axis along which the data is sent.
 
         Returns
         -------
-            The data after being sent to the left neighboring process.
+        The data after being sent to the left neighboring process.
         """
         return lax.ppermute(x, perm=self.leftPerm, axis_name=axis_name)
 
@@ -685,13 +688,11 @@ class LBMBase(object):
 
         Parameters
         ----------
-        f: jax.numpy.ndarray
-            The array holding the distribution functions for the simulation.
+        f (jax.numpy.ndarray): The array holding the distribution functions for the simulation.
 
         Returns
         -------
-        jax.numpy.ndarray
-            The distribution functions after the streaming operation.
+        (jax.numpy.ndarray): The distribution functions after the streaming operation.
         """
         f = self.streaming_p(f)
         left_comm, right_comm = (
@@ -717,11 +718,11 @@ class LBMBase(object):
 
         Parameters
         ----------
-            f: The distribution function.
+        f: The distribution function.
 
         Returns
         -------
-            The updated distribution function after streaming.
+        The updated distribution function after streaming.
         """
 
         def streaming_i(f, c):
@@ -757,18 +758,16 @@ class LBMBase(object):
 
         Parameters
         ----------
-        rho: jax.numpy.ndarray
-            The macroscopic density.
-        u: jax.numpy.ndarray
-            The macroscopic velocity.
-        cast_output: bool, optional
-            A flag indicating whether to cast the density, velocity, and equilibrium distribution function to the
-            compute and output precisions. Default is True.
+        rho (jax.numpy.ndarray): The macroscopic density.
+
+        u (jax.numpy.ndarray): The macroscopic velocity.
+
+        cast_output (bool, optional): A flag indicating whether to cast the density, velocity, and equilibrium distribution function to the
+        compute and output precisions. Default is True.
 
         Returns
         -------
-        feq: ja.numpy.ndarray
-            The equilibrium distribution function.
+        feq (jax.numpy.ndarray): The equilibrium distribution function.
         """
         # Cast the density and velocity to the compute precision if the cast_output flag is True
         if cast_output:
@@ -797,13 +796,11 @@ class LBMBase(object):
 
         Parameters
         ----------
-        fneq: jax.numpy.ndarray
-            The non-equilibrium distribution functions.
+        fneq (jax.numpy.ndarray): The non-equilibrium distribution functions.
 
         Returns
         -------
-        jax.numpy.ndarray
-            The computed momentum flux.
+        (jax.numpy.ndarray): The computed momentum flux.
         """
         return jnp.dot(fneq, self.lattice.cc)
 
@@ -819,15 +816,13 @@ class LBMBase(object):
 
         Parameters
         ----------
-        f: jax.numpy.ndarray
-            The distribution functions.
+        f (jax.numpy.ndarray): The distribution functions.
 
         Returns
         -------
-        rho: jax.numpy.ndarray
-            Computed density.
-        u: jax.numpy.ndarray
-            Computed velocity.
+        rho (jax.numpy.ndarray): Computed density.
+
+        u: (jax.numpy.ndarray): Computed velocity.
         """
         rho = jnp.sum(f, axis=-1, keepdims=True)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
@@ -846,17 +841,15 @@ class LBMBase(object):
 
         Parameters
         ----------
-        fout: jax.numpy.ndarray
-            The post-collision distribution functions.
-        fin: jax.numpy.ndarray
-            The post-streaming distribution functions.
-        implementation_step: str
-            The implementation step at which the boundary conditions should be applied.
+        fout (jax.numpy.ndarray): Post-collision distribution functions.
+
+        fin: jax.numpy.ndarray): Post-streaming distribution functions.
+
+        implementation_step (str): Implementation step at which the boundary conditions should be applied.
 
         Returns
         -------
-        jax.numpy.ndarray
-            The output distribution functions after applying the boundary conditions.
+        (jax.numpy.ndarray): The output distribution functions after applying the boundary conditions.
         """
         for bc in self.BCs:
             fout = bc.prepare_populations(fout, fin, implementation_step)
@@ -883,20 +876,18 @@ class LBMBase(object):
 
         Parameters
         ----------
-        f_poststreaming: jax.numpy.ndarray
-            The post-streaming distribution functions.
-        timestep: int
-            The current timestep of the simulation.
-        return_fpost: bool, optional
-            If True, the function also returns the post-collision distribution functions.
+        f_poststreaming (jax.numpy.ndarray): Post-streaming distribution functions.
+
+        timestep (int): The current timestep of the simulation.
+
+        return_fpost (bool, optional): If True, the function also returns the post-collision distribution functions.
 
         Returns
         -------
-        f_poststreaming: jax.numpy.ndarray
-            The post-streaming distribution functions after the simulation step.
-        f_postcollision: jax.numpy.ndarray or None
-            The post-collision distribution functions after the simulation step, or None if
-            return_fpost is False.
+        f_poststreaming (jax.numpy.ndarray): Post-streaming distribution functions after the simulation step.
+
+        f_postcollision (jax.numpy.ndarray or None): Post-collision distribution functions after the simulation step, or None if
+        return_fpost is False.
         """
         f_postcollision = self.collision(f_poststreaming)
         f_postcollision = self.apply_bc(f_postcollision, f_poststreaming, timestep, "PostCollision")
@@ -920,12 +911,11 @@ class LBMBase(object):
 
         Parameters
         ----------
-        t_max: int
-            The total number of time steps to run the simulation.
+        t_max (int): The total number of time steps to run the simulation.
+
         Returns
         -------
-        f: jax.numpy.ndarray
-            The distribution functions after the simulation.
+        f (jax.numpy.ndarray): The distribution functions after the simulation.
         """
         f = self.assign_fields_sharded()
         start_step = 0
@@ -1042,16 +1032,15 @@ class LBMBase(object):
 
         Parameters
         ----------
-        timestep: int
-            The current time step of the simulation.
-        f: jax.numpy.ndarray
-            The post-streaming distribution functions at the current time step.
-        fstar: jax.numpy.ndarray
-            The post-collision distribution functions at the current time step.
-        rho: jax.numpy.ndarray
-            The density field at the current time step.
-        u: jax.numpy.ndarray
-            The velocity field at the current time step.
+        timestep (int): Current time step of the simulation.
+
+        f (jax.numpy.ndarray): Post-streaming distribution functions at the current time step.
+
+        fstar (jax.numpy.ndarray): Post-collision distribution functions at the current time step.
+
+        rho (jax.numpy.ndarray): Density field at the current time step.
+
+        u (jax.numpy.ndarray): Velocity field at the current time step.
         """
         kwargs = {
             "timestep": timestep,
@@ -1074,9 +1063,8 @@ class LBMBase(object):
 
         Parameters
         ----------
-        **kwargs: dict
-            A dictionary containing the simulation data to be outputted. The keys are the names of the
-            data fields, and the values are the data fields themselves.
+        **kwargs (dict): A dictionary containing the simulation data to be outputted. The keys are the names of the
+        data fields, and the values are the data fields themselves.
         """
         pass
 
@@ -1105,13 +1093,11 @@ class LBMBase(object):
 
         Parameters
         ----------
-        fin: jax.numpy.ndarray
-            The pre-collision distribution functions.
+        fin (jax.numpy.ndarray): Pre-collision distribution functions.
 
         Returns
         -------
-        fin: jax.numpy.ndarray
-            The post-collision distribution functions.
+        fin (jax.numpy.ndarray): Post-collision distribution functions.
         """
         pass
 
@@ -1127,8 +1113,7 @@ class LBMBase(object):
 
         Returns
         -------
-        force: jax.numpy.ndarray
-            The force to be applied to the fluid.
+        force (jax.numpy.ndarray): The force to be applied to the fluid.
         """
         pass
 
@@ -1139,28 +1124,25 @@ class LBMBase(object):
 
         Parameters
         ----------
-        f_postcollision: jax.numpy.ndarray
-            The post-collision distribution functions.
-        feq: jax.numpy.ndarray
-            The equilibrium distribution functions.
-        rho: jax.numpy.ndarray
-            The density field.
+        f_postcollision (jax.numpy.ndarray): Post-collision distribution functions.
 
-        u: jax.numpy.ndarray
-            The velocity field.
+        feq (jax.numpy.ndarray): Equilibrium distribution functions.
+
+        rho (jax.numpy.ndarray): Density field.
+
+        u (jax.numpy.ndarray): Velocity field.
 
         Returns
         -------
-        f_postcollision: jax.numpy.ndarray
-            The post-collision distribution functions with the force applied.
+        f_postcollision (jax.numpy.ndarray): Post-collision distribution functions with the force applied.
 
         References
         ----------
-        Kupershtokh, A. (2004). New method of incorporating a body force term into the lattice Boltzmann equation. In
+        1. Kupershtokh, A. (2004). New method of incorporating a body force term into the lattice Boltzmann equation. In
         Proceedings of the 5th International EHD Workshop (pp. 241-246). University of Poitiers, Poitiers, France.
         Chikatamarla, S. S., & Karlin, I. V. (2013). Entropic lattice Boltzmann method for turbulent flow simulations:
         Boundary conditions. Physica A, 392, 1925-1930.
-        Krüger, T., et al. (2017). The lattice Boltzmann method. Springer International Publishing, 10.978-3, 4-15.
+        2. Krüger, T., et al. (2017). The lattice Boltzmann method. Springer International Publishing, 10.978-3, 4-15.
         """
         delta_u = self.get_force()
         feq_force = self.equilibrium(rho, u + delta_u, cast_output=False)

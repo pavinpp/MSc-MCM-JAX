@@ -44,12 +44,11 @@ class Multiphase(LBMBase):
 
     Parameters
     ----------
-    k: list
-        Modification coefficient, used to tune surface tension.
-    A: list
-       Weighting factor, used for linear combination of Shan-Chen and Zhang-Chen Forces
-    g_kk: numpy.ndarray
-        Inter component interaction strength. Its a matrix of size n_components x n_components. It must be symmetric.
+    k (list): Modification coefficient, used to tune surface tension.
+
+    A (numpy.ndarray): Weighting factor, used for linear combination of Shan-Chen and Zhang-Chen Forces
+
+    g_kk (numpy.ndarray): Inter component interaction strength. Its a matrix of size n_components x n_components. It must be symmetric.
 
     References
     ----------
@@ -59,6 +58,13 @@ class Multiphase(LBMBase):
     2. Yuan, Peng, and Laura Schaefer. “Equations of State in a Lattice Boltzmann Model.”
         Physics of Fluids 18, no. 4 (April 3, 2006): 042101. https://doi.org/10.1063/1.2187070.
 
+    Notes
+    -----
+    1. The boundary conditions for each component is handeled separately. For example a wall BC for two-component system must be
+    defined twice, once for each component (see examples for details).
+    2. Pytrees store component-specific values; order is as defined in initialize_macroscopic_fields by the user.
+    2. Length of pytrees is equal to the no of components in the system.
+    3. All component-specific values passed as a list or an array by the user must be set according to the sequence defined in the initialize_macroscopic_fields.
     """
 
     def __init__(self, **kwargs):
@@ -176,8 +182,7 @@ class Multiphase(LBMBase):
 
     def get_solid_mask_streamed(self):
         """
-        Define the solid mask used for fluid-solid interaction force. Currently the same solid mask is used by all components.
-        Modify to have solid_mask_streamed for each component (useful for component specific boundary condition).
+        Define the solid mask used for fluid-solid interaction force. The boundary conditions must be passed separately.
 
         Parameters
         ----------
@@ -185,7 +190,7 @@ class Multiphase(LBMBase):
 
         Returns
         -------
-        numpy.ndarray: solid_mask array. Dimension: (nx, ny, 1) for d == 2 and (nx, ny, nz, 1) for d == 3
+        solid_mask array: (numpy.ndarray) Dimension: (nx, ny, 1) for d == 2 and (nx, ny, nz, 1) for d == 3
         """
         # solid_indices = []
         # for i in range(self.n_components):
@@ -278,17 +283,15 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density values.
-        u_tree: jax.numpy.ndarray
-            Pytree of velocity values.
-        cast_output: bool, optional
-            A flag to cast the density and velocity values to the compute and output precision. Default: True
+        rho_tree (pytree of jax.numpy.ndarray): Density field
+
+        u_tree (pytree of jax.numpy.ndarray): Velocity field
+
+        cast_output (bool, optional): A flag to cast the density and velocity values to the compute and output precision. Default: True
 
         Returns
         -------
-        feq_tree: pytree of jax.numpy.ndarray
-            Pytree of equillibrium distribution.
+        feq_tree (pytree of jax.numpy.ndarray): Equillibrium distribution
         """
         if cast_output:
             cast = lambda x: self.precisionPolicy.cast_to_compute(x)
@@ -321,15 +324,15 @@ class Multiphase(LBMBase):
         """
         Apply the prescribed contact angle to density. The control parameters for this scheme are
         self.theta_tree, self.phi_tree and self.delta_rho_tree. The max and min density fields are identified from initial configuration.
+        By default, any wall boundary condition can accept optional wettability parameters. By default, these parameters are None.
 
-        Parameters:
+        Parameters
         ----------
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density fields
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
 
-        Returns:
+        Returns
         -------
-        Pytree of density tree with adjusted contact angle values at the boundary nodes.
+        (pytree of jax.numpy.ndarray) Density field with adjusted contact angle values at the boundary nodes.
 
         Reference:
         ---------
@@ -394,8 +397,7 @@ class Multiphase(LBMBase):
 
         Returns
         -------
-        G_ff: jax.numpy.ndarray.
-            Dimension: (q, )
+        G_ff (jax.numpy.ndarray): Dimension: (q, )
         """
         c = np.array(self.lattice.c).T
         G_ff = np.zeros((self.q,), dtype=np.float64)
@@ -501,13 +503,12 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        f_tree: pytree of jax.numpy.ndarray
-            Pytree of distribution arrays.
+        f_tree (pytree of jax.numpy.ndarray): Distribution field.
 
         Returns
         -------
-        rho_tree: pytree of jax.numpy.ndarray for component densities
-        u_tree: pytree of jax.numpy.ndarray for component velocities
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
+        u_tree (pytree of jax.numpy.ndarray): Velocity field.
         """
         rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
@@ -522,14 +523,13 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        f_tree: pytree of jax.numpy.ndarray
-            Pytree of distribution arrays.
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density values.
+        f_tree (pytree of jax.numpy.ndarray): Distribution field.
+
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
 
         Returns
         -------
-        u_tree: pytree of jax.numpy.ndarray for component velocities
+        u_tree (pytree of jax.numpy.ndarray): Velocity field.
         """
         # rho_tree = map(lambda f: jnp.sum(f, axis=-1, keepdims=True), f_tree)
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
@@ -544,13 +544,11 @@ class Multiphase(LBMBase):
 
         Parmeters
         ---------
-        rho_tree: Pytree of jax.numpy.ndarray
-            Pytree of component density values.
+        rho_tree (Pytree of jax.numpy.ndarray): Density field.
 
         Returns
         -------
-        jax.numpy.ndarray
-            Total density values.
+        (jax.numpy.ndarray): Total density field.
         """
         return reduce(operator.add, rho_tree)
 
@@ -561,15 +559,13 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        rho_tree: Pytree of jax.numpy.ndarray
-            Pytree of component density values.
-        u_tree: Pytree of jax.numpy.ndarray
-            Pytree of component velocity values.
+        rho_tree (pytree of jax.numpy.ndarray): Density field
+
+        u_tree (pytree of jax.numpy.ndarray): Velocity field
 
         Returns
         -------
-        jax.numpy.ndarray
-            Total velocity values.
+        (jax.numpy.ndarray): Total velocity field.
         """
         n = reduce(operator.add, map(lambda rho, u: rho * u, rho_tree, u_tree))
         d = reduce(operator.add, rho_tree)
@@ -584,12 +580,13 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        p_tree: pytree of jax.numpy.ndarray
-            Pressure values for all components.
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
+
+        psi_tree (pytree of jax.numpy.ndarray): Pseudopotential field.
 
         Returns
         -------
-        pytree of jax.numpy.ndarray
+        (pytree of jax.numpy.ndarray): Pressure field.
         """
         return self.eos.EOS(rho_tree)
 
@@ -600,29 +597,30 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        p_tree: pytree of jax.numpy.ndarray
-            Pressure values for all components.
+        p_tree (pytree of jax.numpy.ndarray): Pressure field.
+
+        rho_tree (pytree of jax.numpy.ndarray, default=None): Density field.
 
         Returns
         -------
-        jax.numpy.ndarray
+        (jax.numpy.ndarray): Total pressure field.
         """
         return reduce(operator.add, p_tree)
 
     @partial(jit, static_argnums=(0,))
     def compute_potential(self, rho_tree):
         """
-        Compute the potential (psi and U) for each component which is required for computing interaction forces.
-        The psi values are obtained using the corresponding EOS.
+        Compute the potential (psi and U) which is required for computing interaction forces.
+        The psi values are obtained using the corresponding EOS. This function can be overloaded to handle cases where one or more component does not
+        have EOS.
 
         Parameters
         ----------
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density values.
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
 
         Returns
         -------
-        psi_tree: pytree of jax.numpy.ndarray
+        psi_tree (pytree of jax.numpy.ndarray): Pseudopotential field.
         """
         rho_tree = map(lambda rho: self.precisionPolicy.cast_to_compute(rho), rho_tree)
         p_tree = self.compute_pressure(rho_tree)
@@ -642,12 +640,11 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density values.
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
 
         Returns
         -------
-        Pytree of jax.numpy.ndarray
+        fluid_fluid_force (pytree of jax.numpy.ndarray): Total force field.
         """
         rho_tree = self.apply_contact_angle(rho_tree)
         psi_tree, U_tree = self.compute_potential(rho_tree)
@@ -665,19 +662,18 @@ class Multiphase(LBMBase):
         The force calculation is based on the Shan-Chen method using the weighted sum
         of Shan-Chen and Zhang-Chen potential where modified pressure is used:
 
-        modified pressure = k (modification )
+        modified pressure = k * pressure;
+        k is defined by user. Set k=1 for default pseudopotential formulation.
 
         Parameters
         ----------
-        psi_tree: pytree of jax.numpy.ndarray
-            Pytree of pseudo-potential (Yuan-Schaefer, with modification)
-        U_tree: pytree of jax.numpy.ndarray
-            Pytree of pseudo-potential (Zhang-Chen, with modification)
+        psi_tree (pytree of jax.numpy.ndarray): Pseudo-potential field (Yuan-Schaefer, with modification)
+
+        U_tree (pytree of jax.numpy.ndarray): Pseudo-potential field (Zhang-Chen, with modification)
 
         Returns
         -------
-        pytree of jax.numpy.ndarray
-            Pytree of fluid-fluid interaction force.
+        (pytree of jax.numpy.ndarray): Fluid-fluid interaction forces.
         """
         c = jnp.array(self.c, dtype=self.precisionPolicy.compute_dtype).T
         psi_s_tree = map(lambda psi: self.streaming(jnp.repeat(psi, axis=-1, repeats=self.q)), psi_tree)
@@ -745,19 +741,17 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        f_postcollision_tree: pytree of jax.numpy.ndarray
-            pytree of post-collision distribution functions.
-        feq_tree: pytree of jax.numpy.ndarray
-            pytree of equilibrium distribution functions.
-        rho_tree: pytree of jax.numpy.ndarray
-            pytree of density field for all components.
-        u_tree: pytree of jax.numpy.ndarray
-            pytree of velocity field for all components.
+        f_postcollision_tree (pytree of jax.numpy.ndarray): Post-collision distribution field.
+
+        feq_tree (pytree of jax.numpy.ndarray): Equilibrium distribution functions.
+
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
+
+        u_tree (pytree of jax.numpy.ndarray): Velocity field.
 
         Returns
         -------
-        f_postcollision: jax.numpy.ndarray
-            The post-collision distribution functions with the force applied.
+        f_postcollision_tree (pytree of jax.numpy.ndarray): The post-collision distribution field with the force applied.
         """
         F_tree = self.compute_force(rho_tree)
 
@@ -772,17 +766,15 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        fout_tree: jax.numpy.ndarray
-            The post-collision distribution functions.
-        fin_tree: jax.numpy.ndarray
-            The post-streaming distribution functions.
-        implementation_step: str
-            The implementation step at which the boundary conditions should be applied.
+        fout_tree (pytree of jax.numpy.ndarray): The post-collision or post-streaming distribution functions where bc needs to be applied.
+
+        fin_tree (pytree of jax.numpy.ndarray): The pre-collision or post-collision distribution functions.
+
+        implementation_step (str): The implementation step at which the boundary conditions should be applied.
 
         Returns
         -------
-        jax.numpy.ndarray
-            The output distribution functions after applying the boundary conditions.
+        (pytree of jax.numpy.ndarray): The output distribution functions after applying the boundary conditions.
         """
 
         def _apply_bc_(fin, fout, bc):
@@ -822,17 +814,17 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        fin_tree: pytree of jax.numpy.ndarray
-            pytree of post-streaming distribution function.
-        timestep: int
-            Current timestep
+        fin_tree (pytree of jax.numpy.ndarray): Post-streaming distribution function.
+
+        timestep (int): Current timestep
+
+        return_fpost (bool): Return post-collision distribution function (pytree).
 
         Returns
         -------
-        f_poststreaming_tree: pytree of jax.numpy.ndarray
-            pytree of post-streamed distribution function.
-        f_collision_tree: pytree of jax.numpy.ndarray {Optional}
-            pytree of post-collision distribution function.
+        f_poststreaming_tree (pytree of jax.numpy.ndarray): Post-streamed distribution function.
+
+        f_collision_tree (pytree of jax.numpy.ndarray {Optional}): Post-collision distribution function.
         """
         f_postcollision_tree = self.collision(f_poststreaming_tree)
         f_postcollision_tree = self.apply_bc(f_postcollision_tree, f_poststreaming_tree, timestep, "PostCollision")
@@ -856,12 +848,11 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        t_max: int
-            The total number of time steps to run the simulation.
+        t_max (int): The total number of time steps to run the simulation.
+
         Returns
         -------
-        f_tree: pytree of jax.numpy.ndarray
-            pytree of distribution functions after the simulation.
+        f_tree (pytree of jax.numpy.ndarray): Distribution function after t_max timesteps.
         """
         f_tree = self.assign_fields_sharded()
         start_step = 0
@@ -1058,36 +1049,39 @@ class Multiphase(LBMBase):
 
         Parameters
         ----------
-        timestep: int
-            The current time step of the simulation.
-        f_tree: pytree of jax.numpy.ndarray
-            Pytree of post-streaming distribution functions at the current time step.
-        fstar_tree: pytree of jax.numpy.ndarray
-            Pytree of post-collision distribution functions at the current time step.
-        p_tree: Pytree of jax.numpy.ndarray
-            Pressure field at the current time step for each component.
-        p: jax.numpy.ndarray
-            Pressure field at the current time step.
-        u_total: jax.numpy.ndarray
-            Total velocity field at the current time step.
-        u_tree: pytree of jax.numpy.ndarray
-            Pytree of velocity field at the current time step.
-        rho_total: jax.numpy.ndarray
-            Total density field at the current time step.
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density field at the current time step.
-        p_prev_tree: Pytree of jax.numpy.ndarray
-            Pressure field at the previous time step for each component.
-        p_prev: jax.numpy.ndarray
-            Pressure field at the previous time step.
-        u_total_prev: jax.numpy.ndarray
-            Total velocity field at the previous time step.
-        u_prev_tree: pytree of jax.numpy.ndarray
-            Pytree of velocity field at the previous time step.
-        rho_total_prev: jax.numpy.ndarray
-            Total density field at the previous time step.
-        rho_prev_tree: pytree of jax.numpy.ndarray
-            Pytree of density field at the previous time step.
+        timestep (int): The current time step of the simulation.
+
+        f_tree (pytree of jax.numpy.ndarray): Post-streaming distribution functions at the current time step.
+
+        fstar_tree (pytree of jax.numpy.ndarray): Post-collision distribution functions at the current time step.
+
+        p_tree (pytree of jax.numpy.ndarray): Pressure field at the current time step.
+
+        p (jax.numpy.ndarray): Total pressure field at the current time step.
+
+        u_total (jax.numpy.ndarray): Total velocity field at the current time step.
+
+        u_tree (pytree of jax.numpy.ndarray): Velocity field at the current time step.
+
+        rho_total (jax.numpy.ndarray): Total density field at the current time step.
+
+        rho_tree (pytree of jax.numpy.ndarray): Density field at the current time step.
+
+        p_prev_tree (pytree of jax.numpy.ndarray): Pressure field at the previous time step.
+
+        p_prev (jax.numpy.ndarray): Total pressure field at the previous time step.
+
+        u_total_prev (jax.numpy.ndarray): Total velocity field at the previous time step.
+
+        u_prev_tree (pytree of jax.numpy.ndarray): Velocity field at the previous time step.
+
+        rho_total_prev (jax.numpy.ndarray): Total density field at the previous time step.
+
+        rho_prev_tree: (ytree of jax.numpy.ndarray): Density field at the previous time step.
+
+        Returns
+        -------
+        None
         """
         kwargs = {
             "n_components": self.n_components,
@@ -1302,19 +1296,17 @@ class MultiphaseMRT(Multiphase):
 
         Parameters
         ----------
-        m_tree: pytree of jax.numpy.ndarray
-            pytree of post-collision distribution functions.
-        meq_tree: pytree of jax.numpy.ndarray
-            pytree of equilibrium distribution functions.
-        rho_tree: pytree of jax.numpy.ndarray
-            pytree of density field for all components.
-        u_tree: pytree of jax.numpy.ndarray
-            pytree of velocity field for all components.
+        m_tree (pytree of jax.numpy.ndarray): Post-collision distribution function.
+
+        meq_tree (pytree of jax.numpy.ndarray): Equilibrium distribution function.
+
+        rho_tree (pytree of jax.numpy.ndarray): Density field for all components.
+
+        u_tree (pytree of jax.numpy.ndarray): Velocity field for all components.
 
         Returns
         -------
-        f_postcollision: jax.numpy.ndarray
-            The post-collision distribution functions with the force applied.
+        f_postcollision_tree (pytree of jax.numpy.ndarray): Post-collision distribution functions with the force applied.
         """
         F_tree = self.compute_force(rho_tree)
 
@@ -1364,6 +1356,7 @@ class MultiphaseCascade(Multiphase):
 
     The current implementation is based on:
     1. Fei, L. & Luo, K. H. Consistent forcing scheme in the cascaded lattice Boltzmann method. Phys. Rev. E 96, 053307 (2017).
+
     2. Fei, L., Luo, K. H. & Li, Q. Three-dimensional cascaded lattice Boltzmann method: Improved implementation and consistent forcing scheme. Phys. Rev. E 97, 053309 (2018).
     """
 
@@ -2182,15 +2175,13 @@ class MultiphaseCascade(Multiphase):
         """
         Calculate the central moments of the equilibrium distribution.
 
-        Parameters:
+        Parameters
         ----------
-        rho_tree: pytree of jax.numpy.ndarray
-            Pytree of density field for all components.
+        rho_tree (pytree of jax.numpy.ndarray): Density field for all components.
 
-        Returns:
+        Returns
         -------
-        T_eq: pytree of jax.numpy.ndarray
-            Pytree of central moments of the equilibrium distribution.
+        T_eq_tree (pytree of jax.numpy.ndarray): Central moments of the equilibrium distribution.
         """
 
         def f(rho):
@@ -2234,17 +2225,15 @@ class MultiphaseCascade(Multiphase):
         """
         Calculate the central moments of the force distribution. Includes modification to accurately replicate mechanical stability conditions.
 
-        Parameters:
+        Parameters
         ----------
-        F_tree: pytree of jax.numpy.ndarray
-            Pytree of force field for all components.
-        psi_tree: pytree of jax.numpy.ndarray
-            Pytree of potential field for all components.
+        F_tree (pytree of jax.numpy.ndarray): Force field.
 
-        Returns:
+        psi_tree (pytree of jax.numpy.ndarray): Potential field.
+
+        Returns
         -------
-        T_eq: pytree of jax.numpy.ndarray
-            Pytree of central moments of the force distribution.
+        T_eq_tree (pytree of jax.numpy.ndarray): Central moments of the force distribution.
         """
 
         def f(F, sigma, psi, s_b):
@@ -2314,17 +2303,15 @@ class MultiphaseCascade(Multiphase):
 
         Parameters
         ----------
-        Tdash_tree: pytree of jax.numpy.ndarray
-            pytree of central moments post-collision distribution functions.
-        rho_tree: pytree of jax.numpy.ndarray
-            pytree of density field for all components.
-        u_tree: pytree of jax.numpy.ndarray
-            pytree of velocity field for all components.
+        Tdash_tree (pytree of jax.numpy.ndarray): Central moments of post-collision distribution functions.
+
+        rho_tree (pytree of jax.numpy.ndarray): Density field.
+
+        u_tree (pytree of jax.numpy.ndarray): Velocity field.
 
         Returns
         -------
-        f_postcollision: jax.numpy.ndarray
-            The post-collision distribution functions with the force applied.
+        f_postcollision_tree (pytree of jax.numpy.ndarray): The post-collision distribution functions with the force applied.
         """
         F_tree = self.compute_force(rho_tree)
         psi_tree, _ = self.compute_potential(rho_tree)

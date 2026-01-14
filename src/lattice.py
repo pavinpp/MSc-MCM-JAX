@@ -16,13 +16,12 @@ class Lattice(object):
 
     Parameters
     ----------
-    name: str
-        The name of the lattice, which specifies the dimensions and the number of velocities.
-        For example, "D2Q9" represents a 2D lattice with 9 velocities.
-    precision: str, optional
-        The precision of the computations. It can be "f32/f32", "f32/f16", "f64/f64",
-        "f64/f32", or "f64/f16". The first part before the slash is the precision of the
-        computations, and the second part after the slash is the precision of the outputs.
+    name (str): The name of the lattice, which specifies the dimensions and the number of velocities.
+    For example, "D2Q9" represents a 2D lattice with 9 velocities.
+
+    precision (str, optional): The precision of the computations. It can be "f32/f32", "f32/f16", "f64/f64",
+    "f64/f32", or "f64/f16". The first part before the slash is the precision of the
+    computations, and the second part after the slash is the precision of the outputs.
     """
 
     def __init__(self, name, precision="f32/f32") -> None:
@@ -58,8 +57,7 @@ class Lattice(object):
 
         Returns
         -------
-        opposite: numpy.ndarray
-            The indices of the opposite velocities.
+        opposite (numpy.ndarray): The indices of the opposite velocities.
         """
         c = self.c.T
         opposite = np.array([c.tolist().index((-c[i]).tolist()) for i in range(self.q)])
@@ -72,8 +70,7 @@ class Lattice(object):
 
         Returns
         -------
-        numpy.ndarray
-            The indices of the right velocities.
+        (numpy.ndarray): The indices of the right velocities.
         """
         c = self.c.T
         return np.nonzero(c[:, 0] == 1)[0]
@@ -85,8 +82,7 @@ class Lattice(object):
 
         Returns
         -------
-        numpy.ndarray
-            The indices of the left velocities.
+        (numpy.ndarray): The indices of the left velocities.
         """
         c = self.c.T
         return np.nonzero(c[:, 0] == -1)[0]
@@ -99,8 +95,7 @@ class Lattice(object):
 
         Returns
         -------
-        numpy.ndarray
-            The indices of the main velocities.
+        (numpy.ndarray): The indices of the main velocities.
         """
         c = self.c.T
         if self.d == 2:
@@ -119,8 +114,7 @@ class Lattice(object):
 
         Returns
         -------
-        c.T: numpy.ndarray
-            The velocity vectors of the lattice.
+        c.T (numpy.ndarray): The velocity vectors of the lattice, transposed.
         """
         if self.name == "D2Q9":  # D2Q9
             cx = [0, 1, 0, -1, 0, 1, -1, -1, 1]
@@ -148,8 +142,7 @@ class Lattice(object):
 
         Returns
         -------
-        w: numpy.ndarray
-            The weights of the lattice.
+        w (numpy.ndarray): The weights of the lattice.
         """
         # Get the transpose of the lattice vector
         c = self.c.T
@@ -186,8 +179,7 @@ class Lattice(object):
 
         Returns
         -------
-        cc: numpy.ndarray
-            The moments of the lattice.
+        cc (numpy.ndarray): The moments of the lattice.
         """
         c = self.c.T
         # Counter for the loop
@@ -217,8 +209,7 @@ class LatticeD2Q9(Lattice):
 
     Parameters
     ----------
-    precision: str, optional
-        The precision of the lattice. The default is "f32/f32"
+    precision (str, optional): The precision of the lattice. The default is "f32/f32"
     """
 
     def __init__(self, precision="f32/f32"):
@@ -243,8 +234,7 @@ class LatticeD3Q19(Lattice):
 
     Parameters
     ----------
-    precision: str, optional
-        The precision of the lattice. The default is "f32/f32"
+    precision (str, optional): The precision of the lattice. The default is "f32/f32"
     """
 
     def __init__(self, precision="f32/f32"):
@@ -270,8 +260,7 @@ class LatticeD3Q27(Lattice):
 
     Parameters
     ----------
-    precision: str, optional
-        The precision of the lattice. The default is "f32/f32"
+    precision (str, optional): The precision of the lattice. The default is "f32/f32"
     """
 
     def __init__(self, precision="f32/f32"):

@@ -342,7 +342,7 @@ class MRTSim(LBMBase):
 
 class CLBMSim(LBMBase):
     """
-    Central moment (cascaded) collision model
+    Central moment (cascaded) collision model.
     """
 
     def __init__(self, **kwargs):
@@ -1256,17 +1256,13 @@ class CLBMSim(LBMBase):
 
         Parameters
         ----------
-        Tdash: jax.numpy.ndarray
-            Central moments post-collision distribution functions.
-        rho: jax.numpy.ndarray
-            Density field.
-        u: jax.numpy.ndarray
-           Velocity field.
+            Tdash (jax.numpy.ndarray): Central moments post-collision distribution functions.
+            rho (jax.numpy.ndarray): Density field.
+            u (jax.numpy.ndarray): Velocity field.
 
         Returns
         -------
-        f_postcollision: jax.numpy.ndarray
-            The post-collision distribution functions with the force applied.
+            f_postcollision (jax.numpy.ndarray): Post-collision distribution functions with the force applied.
         """
         F = self.get_force()
         if F is None:
