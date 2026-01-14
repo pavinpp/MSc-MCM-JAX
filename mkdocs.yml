@@ -22,7 +22,7 @@ repo_name: 'Github'
 
 # This should be set to the link to the online repository that contains the site,
 # most likely on Bitbucket
-repo_url: https://github.com/Autodesk/XLB
+repo_url: https://github.com/piyush-ppradhan/JAX-LaB
 
 # This should be the relative path from repo_url to the docs folder
 # This parameter is used by some themes to provide an 'edit' link on each page of the site
@@ -33,7 +33,7 @@ watch:
 - ./src/
 
 # Can be used to add a meta tag to the HTML header
-site_description: 'Documentation for project XLB'
+site_description: 'Documentation for project JAX-LaB'
 
 # Sets the theme and theme configuration for the site
 # See https://github.com/mkdocs/mkdocs/wiki/MkDocs-Themes for a list of themes
@@ -43,9 +43,9 @@ theme:
         name: material
         features:
           - header.autohide
-        logo: assets/logo.svg
+        #logo: assets/logo-transparent.png
         # Favicon
-        favicon: assets/logo.svg
+        #favicon: assets/logo.svg
         # Directory containing theme customizations
         # custom_dir: theme_customizations/
         font:
@@ -147,10 +147,11 @@ extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
-  - XLB's home: index.md
-  - XLB API:
-    - XLB base: base.md
-    - XLB models: models.md
-    - XLB lattice: lattice.md
-    - XLB utils: utils.md
-    - XLB boundary conditions: boundary_conditions.md
+  - JAX-LaB's home: index.md
+  - JAX-LaB API:
+    - JAX-LaB base: base.md
+    - JAX-LaB models: models.md
+    - JAX-LaB multiphase: multiphase.md
+    - JAX-LaB lattice: lattice.md
+    - JAX-LaB utils: utils.md
+    - JAX-LaB boundary conditions: boundary_conditions.md

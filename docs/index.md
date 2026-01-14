@@ -1,63 +1,122 @@
-<p align="center">
-  <img src="assets/logo-transparent.png" alt="" width="700">
-</p>
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+# JAX-LaB: A Python-based, Accelerated, Differentiable Massively Parallel Lattice Boltzmann Library for Modeling Multiphase and Multiphysics Flows & Physics-Based Machine Learning
 
-# XLB: A Hardware-Accelerated Differentiable Lattice Boltzmann Simulation Framework based on JAX for Physics-based Machine Learning
+JAX-LaB is a fully differentiable, accelerated multiphysics and multiphase 2D/3D Lattice Boltzmann Method (LBM) Python library written in [JAX](https://github.com/google/jax) and it provides a unified workflow for forward and
+inverse modeling of multiphase flows. JAX-LaB is an extension of [XLB](https://github.com/Autodesk/XLB) and adds support multiphase and multiphysics flows to the original library.
 
-XLB (Accelerated LB) is a fully differentiable 2D/3D Lattice Boltzmann Method (LBM) solver that leverages hardware acceleration. It's built on top of the [JAX](https://github.com/google/jax) library and is specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool for applications in physics-based machine learning.
-
-## Key Features
-- **Integration with JAX Ecosystem:** The solver can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
-- **Scalability:** XLB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations with billions of voxels.
-- **Support for Various LBM Boundary Conditions and Kernels:** XLB supports several LBM boundary conditions and collision kernels.
-- **User-Friendly Interface:** Written entirely in Python, XLB emphasizes a highly accessible interface that allows users to extend the solver with ease and quickly set up and run new simulations.
-- **Leverages JAX Array and Shardmap:** The solver incorporates the new JAX array unified array type and JAX shardmap, providing users with a numpy-like interface. This allows users to focus solely on the semantics, leaving performance optimizations to the compiler.
-- **Platform Versatility:** The same XLB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
-
-## Documentation
-The documentation can be found [here](https://autodesk.github.io/XLB/) (in preparation)
 ## Showcase
-
-The following examples showcase the capabilities of XLB:
-
-<p align="center">
-  <img src="assets/cavity.gif" alt="" width="500">
+<!-- <p align="center">
+  <img src="assets/capillary_fingering.gif" alt="" width="600">
+</p>
+<p align="center" width="300">
+  Capillary fingering in a channel (multi-component simulation)
 </p>
 <p align="center">
-  Lid-driven Cavity flow at Re=100,000 (~25 million voxels)
+  <img src="assets/capillary_rise.gif" alt="" width="700">
 </p>
-
+<p align="center" width="300">
+  Capillary rise in parallel plates (single component, multiphase simulation)
+</p> -->
 <p align="center">
+  <img src="assets/evaporation.gif" alt="" width="600">
+</p>
+<p align="center">
+    Time evolution of liquid distribution in a porous medium during evaporation. Two-component (air–water) system simulated with the Cascaded (central-moment) collision model.
+</p>
+<p align="center">
+  <img src="assets/droplet_impact.gif" alt="" width="600">
+</p>
+<p align="center">
+  On GPU in-situ rendering using <a href="https://github.com/loliverhennigh/PhantomGaze">PhantomGaze</a> library (no I/O). Droplet impact on dry surface using MRT collision model with ~16 million cells.
+  (single component, multiphase simulation, density ratio: 350, fluid modeled using Peng-Robinson EOS).
+</p>
+<p align="center">
+  <img src="assets/drainage.gif" alt="" width="600">
+</p>
+<p align="center">
+  In-situ GPU rendering of drainage in a porous geometry. BGK collision model, 110 million cells.
+</p>
+<!--<p align="center">
   <img src="assets/car.png" alt="" width="500">
 </p>
 <p align="center">
-<a href=https://www.epc.ed.tum.de/en/aer/research-groups/automotive/drivaer > DrivAer model </a> in a wind-tunnel using KBC Lattice Boltzmann Simulation with approx. 317 million voxels
+<a href=https://www.epc.ed.tum.de/en/aer/research-groups/automotive/drivaer > DrivAer model </a> in a wind-tunnel using KBC Lattice Boltzmann Simulation with approx. 317 million cells
 </p>
 
 <p align="center">
-  <img src="assets/airfoil.png" width="500">
+  <img src="assets/building.png" alt="" width="700">
 </p>
 <p align="center">
-  Flow over a NACA airfoil using KBC Lattice Boltzmann Simulation with approx. 100 million voxels
+  Airflow in to, out of, and within a building (~400 million cells)
+</p>-->
+<p align="center">
+  <img src="assets/predicted.png" alt="" width="1000">
+</p>
+<p align="center">
+Temporal evolution of the density field determined using neural network for the inverse multiphase flow control problem of forming a droplet at t = 900. The MLP output is used as the initial condition for LBM and the backpropagation step during training leverages the auto-differentiation capabilities of JAX-LaB (see paper for details).
 </p>
 
-## Capabilities 
+<br>
 
-### LBM
-- BGK collision model (Standard LBM collision model)
-- KBC collision model (unconditionally stable for flows with high Reynolds number)
+## Key Features
+- **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Equinox](https://github.com/patrick-kidger/equinox) [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
+- **Differentiable LBM Kernels:** JAX-LaB provides differentiable LBM kernels that can be used in differentiable physics and deep learning applications.
+- **Scalability:** JAX-LaB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
+- **Support for Various LBM Boundary Conditions and Kernels:** JAX-LaB supports several LBM boundary conditions and collision kernels.
+- **Support for Multiphase, Multiphysics and Multicomponent flows**: JAX-LaB can accurately model multiphysics and multiphase flows using Shan-Chen method, simulating complex interface dynamics without tracking any interface.
+- **User-Friendly Interface:** Written entirely in Python, JAX-LaB emphasizes a highly accessible interface that allows users to extend the library with ease and quickly set up and run new simulations.
+- **Leverages JAX Array and Shardmap:** The library incorporates the new JAX array unified array type and JAX shardmap, providing users with a numpy-like interface. This allows users to focus solely on the semantics, leaving performance optimizations to the compiler.
+- **Platform Versatility:** The same JAX-LaB code can be executed on a variety of platforms including multi-core CPUs, single or multi-GPU systems, TPUs, and it also supports distributed runs on multi-GPU systems or TPU Pod slices.
+- **Visualization:** JAX-LaB provides a variety of visualization options including in-situ on GPU rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze).
 
-### Lattice Models
+## Capabilities
+### Multiphase Flow Modeling
+**Shan-Chen** pseudopotential method with various modifications:
+- Support for **high density ratio flows** (tested for density ratios > 10<sup>8</sup>) using improved forcing scheme.
+- Incorporates **Equation of State (EOS)** to model multiphase flows. Currently implemented EOS include **Carnahan-Starling**, **Peng-Robinson**, **Redlich-Kwong**, **Redlich-Kwong-Soave**
+and **VanderWaals**.
+- **Density ratio independent surface tension** control by directly modifying pressure tensor.
+- **Improved wetting scheme** to handle large range of contact angles **without large spurious current or thick layers near solid surface**.
+### Multicomponent Flow Support
+JAX-LaB takes advantage of *pytrees* for computation hence, it can **model any number of components** (each with their own equation of state, initial condition and boundary conditions) without any
+user modification.
+
+## Wetting model
+- Wetting behavior of fluids is modeled using the [improved virtual density scheme](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.100.053313) which avoids the need to include separate fluid-solid interaction forces commonly seen in Shan-Chen method by directly updating the near-wall densities
+- Wetting parameters can be passed by user while defining wall boundary conditions.
+
+### Collision Models
+- **BGK**
+- **Multi-Relaxation Time (MRT)**
+- **Cascaded Model**
+- **KBC**
+
+### Lattice
 - D2Q9
 - D3Q19
-- D3Q27 (Must be used for KBC simulation runs)
+- D3Q27
+
+### Machine Learning
+
+- Easy integration with JAX's ecosystem of machine learning libraries
+- Differentiable LBM kernels both for single and multiphase flows
+- Differentiable boundary conditions
+
+### Compute Capabilities
+- Distributed Multi-GPU support
+- Mixed-Precision support (store vs compute)
+- Out-of-core support (coming soon)
 
 ### Output
+
 - Binary and ASCII VTK output (based on PyVista library)
+- In-situ rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze) library
+- [Orbax](https://github.com/google/orbax)-based distributed asynchronous checkpointing
 - Image Output
 - 3D mesh voxelizer using trimesh
 
 ### Boundary conditions
+
 - **Equilibrium BC:** In this boundary condition, the fluid populations are assumed to be in at equilibrium. Can be used to set prescribed velocity or pressure.
 
 - **Full-Way Bounceback BC:** In this boundary condition, the velocity of the fluid populations is reflected back to the fluid side of the boundary, resulting in zero fluid velocity at the boundary.
@@ -70,43 +129,38 @@ The following examples showcase the capabilities of XLB:
 - **Regularized BC:** This boundary condition is used to impose a prescribed velocity or pressure profile at the boundary. This BC is more stable than Zouhe BC, but computationally more expensive.
 - **Extrapolation Outflow BC:** A type of outflow boundary condition that uses extrapolation to avoid strong wave reflections.
 
-### Compute Capabilities
-- Distributed Multi-GPU support
-- JAX shard-map and JAX Array support
-- Mixed-Precision support (store vs compute)
+- **Interpolated Bounceback BC:** Interpolated bounce-back boundary condition due to Bouzidi for a lattice Boltzmann method simulation.
+
+- **Convective Outflow BC**: Convective outflow boundary condition, useful for porous media flows.
+
+## Accompanying Paper
+A preprint of the paper, accepted for publication in Journal of Advances in Modeling Earth Systems (JAMES), is available on [arXiv](https://arxiv.org/abs/2506.17713).
 
 ## Installation Guide
+To use JAX-LaB, you must first install JAX and other dependencies using the following commands:
 
-To use XLB, you must first install JAX and other dependencies using the following commands:
+Please refer to https://github.com/google/jax for the latest installation documentation. The following table is taken from [JAX's Github page](https://github.com/google/jax).
 
+| Hardware   | Instructions                                                                                                    |
+|------------|-----------------------------------------------------------------------------------------------------------------|
+| CPU        | `pip install -U "jax[cpu]"`                                                                                       |
+| NVIDIA GPU on x86_64 | `pip install -U "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`        |
+| Google TPU | `pip install -U "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html`                 |
+| AMD GPU    | Use [Docker](https://hub.docker.com/r/rocm/jax) or [build from source](https://jax.readthedocs.io/en/latest/developer.html#additional-notes-for-building-a-rocm-jaxlib-for-amd-gpus). |
+| Apple GPU  | Follow [Apple's instructions](https://developer.apple.com/metal/jax/).                                          |
+
+**Note:** We encountered challenges when executing XLB on Apple GPUs due to the lack of support for certain operations in the Metal backend. We advise using the CPU backend on Mac OS. We will be testing XLB on Apple's GPUs in the future and will update this section accordingly.
+
+
+Install dependencies:
 ```bash
-# Please refer to https://github.com/google/jax for the latest installation documentation
-
-pip install --upgrade pip
-
-# For CPU run
-pip install --upgrade "jax[cpu]"
-
-# For GPU run
-
-# CUDA 12 and cuDNN 8.8 or newer.
-pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-# CUDA 11 and cuDNN 8.6 or newer.
-pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-# Run dependencies
-pip install jmp pyvista numpy matplotlib Rtree trimesh jmp
+pip install pyvista numpy matplotlib Rtree trimesh jmp orbax-checkpoint termcolor
 ```
 
 Run an example:
 ```bash
-git clone https://github.com/Autodesk/XLB
-cd XLB
+git clone https://github.com/piyush-ppradhan/JAX-LaB
+cd JAX-LaB
 export PYTHONPATH=.
-python3 examples/cavity2d.py
+python3 examples/singlephase/cavity2d.py
 ```
-## Citing XLB
-Accompanying publication coming soon:
-
-**M. Ataei, H. Salehipour**. XLB: Hardware-Accelerated, Scalable, and Differentiable Lattice Boltzmann Simulation Framework based on JAX. TBA
