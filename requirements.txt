@@ -1,11 +1,11 @@
-jax==0.7.0
-jaxlib==0.7.0
+jax==0.8.2
+jaxlib==0.8.2
 jmp==0.0.5
-matplotlib==3.10.5
-numpy==2.3.2
-pyvista==1.8.0
-Rtree==1.4.0
-trimesh==4.7.1
-orbax-checkpoint==0.11.20
-termcolor==3.1.0
+matplotlib==3.10.8
+numpy==2.4.1
+pyvista==0.46.5
+Rtree==1.4.1
+trimesh==4.11.0
+orbax-checkpoint==0.11.31
+termcolor==3.3.0
 PhantomGaze @ git+https://github.com/loliverhennigh/PhantomGaze.git
