@@ -435,7 +435,7 @@ if __name__ == "__main__":
     A[0, 0] = A_kk
     A[1, 1] = A_kk
 
-    kwargs = {"a": a, "b": b, "PR_omega": pr_omega, "R": R, "T": T}
+    kwargs = {"a": a, "b": b, "pr_omega": pr_omega, "R": R, "T": T}
     eos = Peng_Robinson(**kwargs)
 
     for r in [25, 30, 35, 40, 45, 50]:
