@@ -312,8 +312,9 @@ class Multiphase(LBMBase):
     def compute_average_density(self, rho_tree):
         rho_s_tree = map(lambda rho: self.streaming(jnp.repeat(rho, axis=-1, repeats=self.lattice.q)), rho_tree)
         rho_ave_tree = map(
-            lambda rho_s, solid_mask: jnp.sum(self.G_ff * rho_s * (1 - solid_mask), axis=-1, keepdims=True)
-            / jnp.sum(self.G_ff * (1 - solid_mask), axis=-1, keepdims=True),
+            lambda rho_s, solid_mask: (
+                jnp.sum(self.G_ff * rho_s * (1 - solid_mask), axis=-1, keepdims=True) / jnp.sum(self.G_ff * (1 - solid_mask), axis=-1, keepdims=True)
+            ),
             rho_s_tree,
             self.solid_mask_streamed,
         )
