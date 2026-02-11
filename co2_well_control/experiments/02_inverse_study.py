@@ -1,4 +1,5 @@
 # generate_inverse_figure.py
+import os
 import jax
 import jax.numpy as jnp
 import optax
@@ -67,6 +68,10 @@ def generate_inverse_plot():
         history_param.append(float(param_width))
         history_loss.append(float(loss))
 
+    base_dir = os.path.dirname(__file__)
+    save_dir = os.path.join(base_dir, "..", "reports", "figures")
+    os.makedirs(save_dir, exist_ok=True)
+
     # 3. Plotting - TWO PANELS
     print("Saving Figure 3...")
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
@@ -90,8 +95,8 @@ def generate_inverse_plot():
     ax2.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig("Figure_3_Convergence_Combined.png", dpi=300)
-    print("Saved 'Figure_3_Convergence_Combined.png'")
+    plt.savefig(os.path.join(save_dir, "Figure_3.png"), dpi=300)
+    print("Saved 'Figure_3.png'")
     plt.show()
 
 if __name__ == "__main__":

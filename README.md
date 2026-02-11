@@ -182,6 +182,12 @@ cd JAX-LaB
 export PYTHONPATH=.
 python3 examples/singlephase/cavity2d.py
 ```
+
+## How to Reproduce Results
+1. Run `python -m co2_well_control.experiments.01_forward_validation` to generate the physics heatmap and pressure signal.
+2. Run `python -m co2_well_control.experiments.02_inverse_study` to see the JAX-based parameter optimization in action.
+3. Results are automatically saved to the `co2_well_control/reports/figures/` directory.
+
 ## Roadmap
 
 ### Work in Progress (WIP)

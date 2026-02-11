@@ -1,4 +1,5 @@
 # generate_paper_figures.py
+import os
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -44,6 +45,10 @@ def generate_physics_figures():
     # 4. Run Simulation
     (f1_final, f2_final), p_history = jax.lax.scan(update_wrapper, (f1, f2), None, length=cfg.steps)
     
+    base_dir = os.path.dirname(__file__)
+    save_dir = os.path.join(base_dir, "..", "reports", "figures")
+    os.makedirs(save_dir, exist_ok=True)
+
     # --- FIGURE 1: Density Heatmap (The "Cross-section") ---
     print("Generating Figure 1: Density Heatmap...")
     rho_total = jnp.sum(f1_final, axis=-1) + jnp.sum(f2_final, axis=-1)
@@ -58,8 +63,8 @@ def generate_physics_figures():
     plt.xlabel("Distance from Wellbore (Lattice Units)")
     plt.ylabel("Fracture Width / Matrix")
     plt.tight_layout()
-    plt.savefig("Figure_1_Density_Heatmap.png", dpi=300)
-    print("Saved 'Figure_1_Density_Heatmap.png'")
+    plt.savefig(os.path.join(save_dir, "Figure_1.png"), dpi=300)
+    print("Saved 'Figure_1.png'")
     
     # --- FIGURE 2: Pressure Transient (The "Graph") ---
     print("Generating Figure 2: Pressure Graph...")
@@ -76,8 +81,8 @@ def generate_physics_figures():
     plt.text(1500, jnp.max(p_history), "Steady State", fontsize=9)
     
     plt.tight_layout()
-    plt.savefig("Figure_2_Pressure_Transient.png", dpi=300)
-    print("Saved 'Figure_2_Pressure_Transient.png'")
+    plt.savefig(os.path.join(save_dir, "Figure_2.png"), dpi=300)
+    print("Saved 'Figure_2.png'")
     
     plt.show()
 

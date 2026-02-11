@@ -1,4 +1,5 @@
 # experiments/03_noise_robustness.py
+import os
 import jax
 import jax.numpy as jnp
 import optax
@@ -81,6 +82,9 @@ def run_noise_experiment():
         results[noise_pct] = history
         print(f"Final Result ({noise_pct*100}% Noise): {float(param_width):.3f}")
 
+    save_dir = os.path.join(os.path.dirname(__file__), "..", "reports", "figures")
+    os.makedirs(save_dir, exist_ok=True)
+
     # --- 3. Visualization for Paper ---
     plt.figure(figsize=(10, 6))
     for noise_pct, history in results.items():
@@ -94,7 +98,7 @@ def run_noise_experiment():
     plt.title("Robustness of Differentiable Inverse Solver to Sensor Noise")
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig("noise_robustness_result.png")
+    plt.savefig(os.path.join(save_dir, "Figure_5.png"))
     plt.show()
 
 if __name__ == "__main__":

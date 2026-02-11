@@ -1,4 +1,5 @@
 # visualize_noise.py
+import os
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -52,6 +53,10 @@ def visualize_sensor_data():
     noise = jax.random.normal(jax.random.PRNGKey(42), clean_signal.shape) * mean_val * noise_percentage
     noisy_signal = clean_signal + noise
 
+    base_dir = os.path.dirname(__file__)
+    save_dir = os.path.join(base_dir, "..", "reports", "figures")
+    os.makedirs(save_dir, exist_ok=True)
+
     # 5. Plotting
     plt.figure(figsize=(12, 6))
     
@@ -68,8 +73,8 @@ def visualize_sensor_data():
     plt.grid(True, alpha=0.3)
     
     # Save and Show
-    plt.savefig("forward_noise_visualization.png")
-    print("Graph saved as 'forward_noise_visualization.png'")
+    plt.savefig(os.path.join(save_dir, "Figure_4.png"))
+    print("Graph saved as 'Figure_4.png'")
     plt.show()
 
 if __name__ == "__main__":
