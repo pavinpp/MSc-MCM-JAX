@@ -1,0 +1,25 @@
+============================================================
+       APPENDIX A: SIMULATION CONFIGURATION
+============================================================
+1. Domain Geometry
+   - Grid Dimensions:        128 x 64
+   - Simulation Duration:    2000 steps
+2. Fluid Parameters
+   - Brine Density:          1.00
+   - CO2 Init Density:       0.80
+   - Viscosity (Tau CO2):    0.70
+3. Reactive Transport
+   - Salt Diffusion (D):     0.010
+   - Solubility Limit (Ksp): 1.00
+============================================================
+
+============================================================
+       APPENDIX B: OPTIMIZED RESULTS SUMMARY
+============================================================
+STRATEGY             | FINAL SAT    | GAIN       | TYPE      
+------------------------------------------------------------
+Baseline             | 0.0473       | +0.00%    | Static
+square               | 0.0538       | +13.59%   | dict
+------------------------------------------------------------
+PARAMETERS: freq: 10.0000, amp: 0.1000
+============================================================
