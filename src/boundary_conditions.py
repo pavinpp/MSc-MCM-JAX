@@ -1106,17 +1106,7 @@ class InterpolatedBounceBackBouzidi(BounceBackHalfway):
         Contact angle parameter delta_rho, applied for multiphase flows and only set for wall boundary conditions.
     """
 
-    def __init__(
-        self,
-        indices,
-        implicit_distances,
-        grid_info,
-        precision_policy,
-        vel=None,
-        theta=None,
-        phi=None,
-        delta_rho=None,
-    ):
+    def __init__(self, indices, implicit_distances, grid_info, precision_policy, vel=None, theta=None, phi=None, delta_rho=None):
         super().__init__(indices, grid_info, precision_policy, vel=vel)
         self.name = "InterpolatedBounceBackBouzidi"
         self.implicit_distances = implicit_distances
@@ -1271,7 +1261,7 @@ class ConvectiveOutflow(BoundaryCondition):
     def __init__(self, indices, gridInfo, precision_policy):
         super().__init__(indices, gridInfo, precision_policy)
         self.name = "ConvectiveOutflow"
-        self.needsExtraConfiguration = True
+        self.needsExtraConfiguration = False
         self.neighbors_found = False
 
     def configure(self, boundaryMask):
@@ -1281,10 +1271,7 @@ class ConvectiveOutflow(BoundaryCondition):
         """
         nv = np.dot(self.lattice.c, ~boundaryMask.T)
         corner_voxels = np.count_nonzero(nv, axis=0) > 1
-        # removed_voxels = np.array(self.indices)[:, corner_voxels]
         self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
-        self.normals = self.normals[~corner_voxels]
-        return
 
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
@@ -1292,10 +1279,124 @@ class ConvectiveOutflow(BoundaryCondition):
         nbd = len(self.indices[0])
         self.bindex = np.arange(nbd)[:, None]
 
+    # @partial(jit, static_argnums=(0, 3), inline=True)
+    # def prepare_populations(self, fout, fin, implementation_step):
+    #     """
+    #     Prepares the distribution functions for the boundary condition.
+    #
+    #     Parameters
+    #     ----------
+    #     fout : jax.numpy.ndarray
+    #         The incoming distribution functions.
+    #     fin : jax.numpy.ndarray
+    #         The outgoing distribution functions.
+    #     implementation_step : str
+    #         The step in the lattice Boltzmann method algorithm at which the preparation is applied.
+    #
+    #     Returns
+    #     -------
+    #     jax.numpy.ndarray
+    #         The prepared distribution functions.
+    #
+    #     Notes
+    #     -----
+    #     During PostCollision, stores the previous timestep's post-streaming boundary values
+    #     (imissing directions) into the iknown slots of the post-collision array. These values
+    #     survive streaming and are retrieved in the apply method during PostStreaming.
+    #     """
+    #     if implementation_step == "PostStreaming":
+    #         return fout
+    #
+    #     if not self.neighbors_found:
+    #         self.find_neighbors()
+    #         self.neighbors_found = True
+    #
+    #     nbd = len(self.indices[0])
+    #     bindex = np.arange(nbd)[:, None]
+    #     fps_bdr = fin[self.indices]
+    #     fpc_bdr = fout[self.indices]
+    #     fpc_bdr = fpc_bdr.at[bindex, self.iknown].set(fps_bdr[bindex, self.imissing])
+    #     fout = fout.at[self.indices].set(fpc_bdr)
+    #     return fout
+
+    @partial(jit, static_argnums=(0,))
+    def apply(self, fout, fin):
+        """
+        Applies the convective outflow boundary condition.
+
+        Parameters
+        ----------
+        fout : jax.numpy.ndarray
+            The output distribution functions.
+        fin : jax.numpy.ndarray
+            The input distribution functions.
+
+        Returns
+        -------
+        jax.numpy.ndarray
+            The modified output distribution functions after applying the boundary condition.
+        """
+        if not self.neighbors_found:
+            self.find_neighbors()
+            self.neighbors_found = True
+
+        nbd = len(self.indices[0])
+        bindex = np.arange(nbd)[:, None]
+
+        f_nbr = fout[self.indices_nbr]
+        rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
+        u_nbr = jnp.sum((jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr) * self.normals, axis=-1, keepdims=True)
+        lambda_cbc = jnp.max(u_nbr)
+
+        # Retrieve previous timestep's imissing values (stored in iknown slots during PostCollision)
+        f_prev_missing = fin[self.indices][bindex, self.iknown]
+
+        # Start from post-streaming values (correct for known directions)
+        # fbd = fout[self.indices]
+        # Apply convective formula to missing directions only
+        # f_new_missing = (f_prev_missing + lambda_cbc * f_nbr[bindex, self.imissing]) / (1 + lambda_cbc)
+        # f_new_missing = (1 - lambda_cbc) * f_prev_missing + lambda_cbc * f_nbr[bindex, self.imissing]
+        # fbd = fbd.at[bindex, self.imissing].set(f_new_missing)
+
+        f_prev_missing = fin[self.indices]
+        # fbd = (f_prev_missing + lambda_cbc * f_nbr) / (1 + lambda_cbc)
+        fbd = (1 - lambda_cbc) * f_nbr + lambda_cbc * f_prev_missing
+
+        return fbd
+
+
+class ExtrapolationOutflowMultiphase(BoundaryCondition):
+    """
+    Extrapolation boundary condition for multiphase flows.
+
+    Attributes
+    ----------
+    name : str
+        The name of the boundary condition. For this class, it is "NonEquilibriumExtrapolation".
+
+    References
+    ----------
+    1. Zhao-Li, G., Chu-Guang, Z. & Bao-Chang, S. Non-equilibrium extrapolation method for velocity and pressure boundary conditions in the lattice
+    Boltzmann method. Chinese Phys. 11, 366–374 (2002).
+    """
+
+    def __init__(self, indices, gridInfo, precisionPolicy):
+        super().__init__(indices, gridInfo, precisionPolicy)
+        self.name = "ExtrapolationOutflowMultiphase"
+        self.needsExtraConfiguration = False
+        self.neighbors_found = False
+
+    def find_neighbors(self):
+        ind = np.array(self.indices).T - self.normals
+        self.indices_nbr = tuple(ind.T)
+        self.indices_next_nbr = tuple((np.array(self.indices_nbr).T - self.normals).T)
+        nbd = len(self.indices[0])
+        self.bindex = np.arange(nbd)[:, None]
+
     @partial(jit, static_argnums=(0,))
     def apply(self, fout, _):
         """
-        Applies the convective outflow boundary condition.
+        Applies the non-equilibrium extrapolation boundary condition.
 
         Parameters
         ----------
@@ -1313,20 +1414,10 @@ class ConvectiveOutflow(BoundaryCondition):
             self.find_neighbors()
             self.neighbors_found = True
 
-        f_nbr = fout[self.indices_nbr]
-        rho_nbr = jnp.sum(f_nbr, axis=-1, keepdims=True)
-        u_nbr = jnp.sum(
-            (jnp.dot(f_nbr, self.lattice.c.T) / rho_nbr) * self.normals,
-            axis=-1,
-            keepdims=True,
-        )
-        lambda_cbc = jnp.mean(u_nbr)
-
         fbd = fout[self.indices]
-        fbd = fbd.at[self.bindex, self.imissing].set(fbd[self.bindex, self.imissing] + lambda_cbc * f_nbr[self.bindex, self.imissing]) / (
-            1 + lambda_cbc
-        )
-        # fbd = fbd.at[...].set((fbd + lambda_cbc * f_nbr) / (1 + lambda_cbc))
+        f_nbr = fout[self.indices_nbr]
+        f_next_nbr = fout[self.indices_next_nbr]
+        fbd = fbd.at[self.bindex, self.imissing].set(2 * f_nbr[self.bindex, self.imissing] - f_next_nbr[self.bindex, self.imissing])
         return fbd
 
 
@@ -1350,68 +1441,13 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         self.name = "NonEquilibriumExtrapolation"
         self.needsExtraConfiguration = False
         self.prescribed = prescribed
-        self.G_ff = self.compute_ff_greens_function()
-        self.find_neighbors()
-
-    # def configure(self, boundaryMask):
-    #     """
-    #     Correct boundary indices to ensure that only voxelized surfaces with normal vectors along main cartesian axes
-    #     are assigned this type of BC.
-    #     """
-    #     nv = np.dot(self.lattice.c, ~boundaryMask.T)
-    #     corner_voxels = np.count_nonzero(nv, axis=0) > 1
-    #     # removed_voxels = np.array(self.indices)[:, corner_voxels]
-    #     self.indices = tuple(np.array(self.indices)[:, ~corner_voxels])
-    #     self.normals = self.normals[~corner_voxels]
-    #     return
-
-    def compute_ff_greens_function(self):
-        """
-        Define the Green's function used to compute interaction phase-phase interaction forces.
-
-        The interaction coefficient between k^th and kprime^th component: self.gkkprime[k, kprime]
-        During computation, this value is multiplied with corresponding g_kkprime value to get the Green's function:
-        G_kkprime = self.g_kk[k, k_prime] * self.G_ff
-
-        G_kkprime(x, x') = g1 * g_kkprime,  if |x - x'| = 1
-                         = g2 * g_kkprime,  if |x - x'| = sqrt(2)
-                         = 0,               otherwise
-
-        Here d is the dimension of problem and x' are the neighboring points.
-
-        Some examples values could be:
-        For D2Q9:
-            g1 = 2 and g2 = 1/2
-        For D3Q19
-            g1 = 1 and g2 = 1/2
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        G_ff: jax.numpy.ndarray.
-            Dimension: (q, )
-        """
-        c = np.array(self.lattice.c).T
-        G_ff = np.zeros((self.lattice.q,), dtype=np.float64)
-        cl = np.linalg.norm(c, axis=-1)
-        if isinstance(self.lattice, LatticeD2Q9):
-            g1 = 1 / 3
-            g2 = 1 / 12
-            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
-            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
-        elif isinstance(self.lattice, LatticeD3Q19):
-            g1 = 1 / 6
-            g2 = 1 / 12
-            G_ff[np.isclose(cl, 1.0, atol=1e-6)] = g1
-            G_ff[np.isclose(cl, jnp.sqrt(2.0), atol=1e-6)] = g2
-        return jnp.array(G_ff, dtype=self.precisionPolicy.compute_dtype)
+        # self.G_ff = self.compute_ff_greens_function()
+        self.neighbors_found = False
 
     def find_neighbors(self):
         ind = np.array(self.indices).T - self.normals
         self.indices_nbr = tuple(ind.T)
+        self.indices_next_nbr = tuple((np.array(self.indices_nbr).T - self.normals).T)
         nbd = len(self.indices[0])
         self.bindex = np.arange(nbd)[:, None]
 
@@ -1432,6 +1468,10 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         jax.numpy.ndarray
             The modified output distribution functions after applying the boundary condition.
         """
+        if not self.neighbors_found:
+            self.find_neighbors()
+            self.neighbors_found = True
+
         fbd = fout[self.indices]
         f_nbr = fout[self.indices_nbr]
         rho = jnp.sum(fbd, axis=-1, keepdims=True)
@@ -1441,8 +1481,8 @@ class NonEquilibriumExtrapolation(BoundaryCondition):
         feq = self.equilibrium(rho, vel_nbr)
         feq_nbr = self.equilibrium(rho_nbr, vel_nbr)
         fneq_nbr = f_nbr - feq_nbr
-
         fbd = fbd.at[self.bindex, self.imissing].set(feq[self.bindex, self.imissing] + fneq_nbr[self.bindex, self.imissing])
+
         return fbd
 
 

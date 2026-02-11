@@ -256,8 +256,8 @@ class Redlich_Kwong_Soave(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def drho_dT(self, rho_tree, T):
-        dalpha_dT = (
-            lambda rks_omega, Tc: -1.0
+        dalpha_dT = lambda rks_omega, Tc: (
+            -1.0
             * (T / Tc) ** 0.5
             * ((1 - (T / Tc) ** 0.5) * (-0.176 * rks_omega**2 + 1.574 * rks_omega + 0.48) + 1)
             * (-0.176 * rks_omega**2 + 1.574 * rks_omega + 0.48)
@@ -346,15 +346,15 @@ class Peng_Robinson(EOS):
 
     @partial(jit, static_argnums=(0,), inline=True)
     def drho_dT(self, rho_tree, T):
-        dalpha_dT = (
-            lambda pr_omega, Tc: -1.0
+        dalpha_dT = lambda pr_omega, Tc: (
+            -1.0
             * (T / Tc) ** 0.5
             * ((1 - (T / Tc) ** 0.5) * (-0.26992 * pr_omega**2 + 1.54226 * pr_omega + 0.37464) + 1)
             * (-0.26992 * pr_omega**2 + 1.54226 * pr_omega + 0.37464)
             / T
         )
-        drho_dT = lambda a, b, R, rho, pr_omega, Tc: (rho * R) / (1.0 - b * rho) - (a * dalpha_dT(pr_omega, Tc) * rho**2) / (
-            1.0 + 2 * b * rho - b**2 * rho**2
+        drho_dT = lambda a, b, R, rho, pr_omega, Tc: (
+            (rho * R) / (1.0 - b * rho) - (a * dalpha_dT(pr_omega, Tc) * rho**2) / (1.0 + 2 * b * rho - b**2 * rho**2)
         )
         return map(
             lambda a, b, R, rho, pr_omega, Tc: drho_dT(a, b, R, rho, pr_omega, Tc), self.a, self.b, self.R, rho_tree, self.pr_omega, self.Tc_tree
